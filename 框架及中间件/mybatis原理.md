@@ -19,6 +19,8 @@ sqlSession从代理工厂MapperProxyFactory获取代理类，代理类执行方�
 
 它是MappedStatement的一个属性，**主要作用是根据参数和其他规则组装SQL**，也是很复杂的，一般也不用修改它。
 
+select * from user where id=?
+
 ###  BoundSql
 
 对于参数和SQL，主要反映在BoundSql类对象上，在插件中，通过它获取到当前运行的SQL和参数以及参数规则，作出适当的修改，满足特殊的要求。**根据不同的sql入参，做出不同的调整，也就是最终数据库执行的带参数的sql语句**
@@ -434,6 +436,104 @@ sqlSession.clearCache();
         System.out.println(user1);   //输出的userName为测试一级缓存修改，可见出现了脏数据
     }
 ```
+
+## 二级缓存原理
+
+key 与一级缓存相同
+
+多个sqlSession共享
+
+查询操作会先把数据存储到TransactionalCacheManager中的TransactionalCache中，sqlSession提交过后会把TransactionalCache二级缓存只有sqlSession提交过后才会生效，把TransactionalCache中的数据存储到PerpetualCache对象中，MapperStatement持有PerpetualCache对象。
+
+```
+public class TransactionalCacheManager {
+
+  private final Map<Cache, TransactionalCache> transactionalCaches = new HashMap<Cache, TransactionalCache>();
+
+```
+
+TransactionalCache类存储数据
+
+```
+public class TransactionalCache implements Cache {
+
+  private static final Log log = LogFactory.getLog(TransactionalCache.class);
+
+  private final Cache delegate;
+  private boolean clearOnCommit;
+  private final Map<Object, Object> entriesToAddOnCommit;
+  private final Set<Object> entriesMissedInCache;
+```
+
+commit操作会把数据转存到真正的二级缓存区域
+
+```
+  @Override
+  public void commit(boolean required) throws SQLException {
+    delegate.commit(required);
+    //转存到二级缓存PerpetualCache里
+    tcm.commit();
+```
+
+对于修改操作会清空二级缓存
+
+```
+
+  @Override
+  public void clear() {
+  
+  //标识符设置为true
+    clearOnCommit = true;
+    entriesToAddOnCommit.clear();
+  }
+ //清空真正二级缓存区域
+  public void commit() {
+    if (clearOnCommit) {
+      delegate.clear();
+    }
+    flushPendingEntries();
+    reset();
+  }
+
+```
+
+下面第一次和第二次查询数据一样，但是中间有一次修改操作，对于同一个mapper数据是正确的，因为commit操作会清空MapperStatement下的真正二级缓存区域。
+
+但是对于多个和不同的mapper对于关联数据或者同一张表的操作会产生脏数据
+
+```
+
+            SqlSession sqlSession = sqlSessionFactory.openSession(false);
+            SqlSession sqlSession1 = sqlSessionFactory.openSession(false);
+            SqlSession sqlSession2 = sqlSessionFactory.openSession(false);
+            RoleDao roleMapper = sqlSession.getMapper(RoleDao.class);
+            RoleDao roleMapper1 = sqlSession1.getMapper(RoleDao.class);
+            RoleDao roleMapper2 = sqlSession2.getMapper(RoleDao.class);
+
+
+            //sqlSession查询
+            List<Role> role = roleMapper.findRolesByUserId("1566036188458575655");
+            System.out.println("sqlSession第一次查询" + role);
+            //sqlSession.commit();
+            sqlSession.close();
+
+            //sqlSession1 修改数据
+            roleMapper1.update("二级缓存测试", "1566036188458575655");
+            //System.out.println("sqlSession1修改之后未提交查询查询" + roleMapper1.findRolesByUserId("1566036188458575655"));
+            //sqlSession1.commit();
+            sqlSession1.close();
+            
+
+            //sqlSession2提交后查询
+            List<Role> role2 = roleMapper2.findRolesByUserId("1566036188458575655");
+            System.out.println("sqlSession2提交后查询" + role2);
+            //sqlSession2.commit();
+            sqlSession2.close();
+```
+
+## 拦截器
+
+
 
 
 
