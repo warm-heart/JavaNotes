@@ -211,6 +211,16 @@ System.out.println("update: " + JSON.toJSONString(updateResponse));
 
 #### 数据的搜索
 
+ ##### 高级查询
+
+**termQuery和matchQuery区别：**
+
+term不会分词，march会根据提供的分词器进行分词
+
+**AND与OR：**
+
+filter，must，should
+
 - AND查询
 
 可以多个条件一起相当于数据库中的 AND，两种实现filter和must
@@ -249,7 +259,7 @@ System.out.println("update: " + JSON.toJSONString(updateResponse));
         boolBuilder.should(QueryBuilders.matchQuery(EsConsts.CATEGORY_NAME, "dafdfer"));
 ```
 
-#### 排序
+##### 排序
 
 ```
 
@@ -259,12 +269,10 @@ System.out.println("update: " + JSON.toJSONString(updateResponse));
         sourceBuilder.sort(fsb);
 ```
 
-
-
-### 查询索引映射成实体类完整实例
+##### 查询索引映射成实体类完整实例
 
 ```
- // 构建查询条件
+       // 构建查询条件
         BoolQueryBuilder boolBuilder = QueryBuilders.boolQuery();
 
         //可以多个条件一起相当于数据库中的 AND

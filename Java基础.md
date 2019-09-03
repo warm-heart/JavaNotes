@@ -151,6 +151,63 @@ Java中的泛型基本上都是在编译器这个层次来实现的。在生成�
 
 抽象类是可以有私有方法或私有变量的，通过把类或者类中的方法声明为abstract来表示一个类是抽象类，被声明为抽象的方法不能包含方法体。子类实现方法必须含有相同的或者更高的访问级别(public->protected->private)。抽象类的子类为父类中所有抽象方法的具体实现，否则也是抽象类。
 
+# 克隆
+
+在实际编程过程中，我们常常要遇到这种情况：有一个对象A，在某一时刻A中已经包含了一些有效值，此时可能 会需要一个和A完全相同新对象B，并且此后对B任何改动都不会影响到A中的值，也就是说，A与B是两个独立的对象，但B的初始值是由A对象确定的。在 Java语言中，用简单的赋值语句是不能满足这种需求的。要满足这种需求虽然有很多途径，但实现clone（）方法是其中最简单，也是最高效的手段。 
+Java的所有类都默认继承java.lang.Object类，在java.lang.Object类中有一个方法clone()。JDK API的说明文档解释这个方法将返回Object对象的一个拷贝。要说明的有两点：一是拷贝对象返回的是一个新对象，而不是一个引用。二是拷贝对象与用 new操作符返回的新对象的区别就是这个拷贝已经包含了一些原来对象的信息，而不是对象的初始信息。 
+
+### 深拷贝与浅拷贝
+
+对于引用类型来说，浅拷贝用的还是同一个对象所在的内存地址，如果克隆后的独享修改了属性，那么持有这个引用的所有对象的属性都会被修改，深拷贝则会解决这个问题
+
+### 实现深拷贝方式
+
+##### 所有的引用类型都实现clone方法
+
+```
+public class Animal implements Cloneable {
+    private String type;
+    private Integer age;
+    private AnimalHome home;
+    
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        Animal animal = (Animal) super.clone();
+        animal.home = (AnimalHome) home.clone();
+        return animal;
+    }
+    
+    
+    public class AnimalHome implements Cloneable {
+    private String locate;
+
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        return super.clone();
+    }
+```
+
+##### 使用序列化
+
+序列化是把对象写到流中便于传输，而反序列化则是把对象从流中读取出来，这里写到流中的对象则是原始对象的一个拷贝，因为原始对象还存在JVM中，所以可以利用序列化产生克隆对象，然后通过反序列化获取这个对象
+
+```
+public Object deepClone() throws IOException, ClassNotFoundException {
+        //序列化
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos);
+        oos.writeObject(this);
+        //反序列化
+        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+        ObjectInputStream ois = new ObjectInputStream(bis);
+        return ois.readObject();
+    }
+```
+
+
+
+
+
 
 
 

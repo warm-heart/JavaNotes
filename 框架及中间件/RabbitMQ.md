@@ -472,7 +472,7 @@ void basicPublish(String exchange, String routingKey, boolean mandatory, boolean
 
 #### 消费端保障幂等性
 
-首先，无论是RabbitMQ、RocketMQ还是kafka，都有可能出现消息的重复发送，这个是MQ无法保障的，而幂等性是开发或者运维人员需要保证的
+首先，无论是RabbitMQ、RocketMQ还是kafka，都有可能出现消息的重复发送，这个是MQ无法保障的，而幂等性是开发或者运维人员需要保证的。在消费端做消息幂等性
 
 ##### 可能出现幂等性情况
 
