@@ -369,18 +369,136 @@ Redis全量复制一般发生在Slave初始化阶段，这时Slave需要将Maste
 
 #### 增量同步
 
-Redis增量复制是指Slave初始化后开始正常工作时主服务器发生的写操作同步到从服务器的过程。 
-增量复制的过程主要是主服务器每执行一个写命令就会向从服务器发送相同的写命令，从服务器接收并执行收到的写命令。
+- 如果网络发生抖动，2.8版本之前会重新生产rdb文件，然后重新执行
+- 之后，提供部分复制功能、如果抖动，master会在复制缓冲区生成一个buffer（默认1M），如果offset在buffer范围内，则会将部分数据复制到slave，而不需要全量复制
+
+1. redis什么时候会发生全量复制？
+
+   a) redis slave首启动或者重启后，连接到master时
+
+   b) redis slave进程没重启，但是掉线了，重连后不满足部分复制条件
+
+2. redis什么时候会发生部分复制？
+
+   部分复制需要的条件
+
+   a) 主从的redis版本>=2.8
+
+   b) redis slave进程没有重启，但是掉线了，重连了master(因为slave进程重启的话，run id就没有了)
+
+   c) redis slave保存的run id与master当前run id一致 (注：run id并不是pid，slave把它保存在内存中，重启就消失)
+
+   d) redis slave掉线期间，master保存在内存的offset可用，也就是master变化不大，被更改的指令都保存在内存
+
+3. redis进程重启后会发生全量复制还是部分复制？
+
+  a) master重启时，run id会发生变化
+
+  b) slave重启时，run id会丢失
+
+会发生全量复制，因为部分复制的条件之一run id已经不能满足
 
 **缺点：**
 
-没有实现故障自动转移
+没有实现故障自动转移，哨兵模式实现故障自动转移
 
 ## 哨兵模式
 
+### 概念
 
+Redis-Sentinel是Redis官方推荐的高可用性(HA)解决方案。实际上这意味着你可以使用Sentinel模式创建一个可以不用人为干预而应对各种故障的Redis部署。
 
-## 集群模式
+- **监控(Monitoring)**: Sentinel 会不断地定期检查你的主服务器和从服务器是否运作正常。
+- **提醒(Notification)**: 当被监控的某个 Redis 服务器出现问题时， Sentinel 可以通过 API 向管理员或者其他应用程序发送通知。
+- 它的主要功能有以下几点
+  - 监控：Sentinel不断的检查master和slave是否正常的运行。
+  - 通知：如果发现某个redis节点运行出现问题，可以通过API通知系统管理员和其他的应用程序。
+  - 自动故障转移：能够进行自动切换。当一个master节点不可用时，能够选举出master的多个slave中的一个来作为新的master,其它的slave节点会将它所追随的master的地址改为被提升为master的slave的新地址。
+  - 配置提供者：哨兵作为Redis客户端发现的权威来源：客户端连接到哨兵请求当前可靠的master的地址。如果发生故障，哨兵将报告新地址。
+- **自动故障迁移(Automaticfailover)**: 当一个主服务器不能正常工作时， Sentinel 会开始一次自动故障迁移操作， 它会将失效主服务器的其中 一个从服务器升级为新的主服务器， 并让失效主服务器的其他从服务器改为复制新的主服务器; 当客 户端试图连接失效的主服务器时， 集群也会向客户端返回新主服务器的地址， 使得集群可以使用新主 服务器代替失效服务器。
+
+### 配置
+
+ **配置一：sentinel monitor <master-name> <ip> <port> <quorum>**
+
+ 这个配置表达的是 哨兵节点定期监控 名字叫做 <master-name>  并且 IP 为 <ip> 端口号为 <port> 的主节点。<quorum> 表示的是哨兵判断主节点是否发生故障的票数。也就是说如果我们将<quorum>设置为2就代表至少要有两个哨兵认为主节点故障了，才算这个主节点是客观下线的了，一般是设置为sentinel节点数的一半加一。
+
+**配置二：sentinel down-after-milliseconds <master-name> <times>**
+
+每个哨兵节点会定期发送ping命令来判断Redis节点和其余的哨兵节点是否是可达的，如果超过了配置的<times>时间没有收到pong回复，就主观判断节点是不可达的,<times>的单位为毫秒。
+
+**配置三：sentinel parallel-syncs <master-name> <nums>**
+
+当哨兵节点都认为主节点故障时，哨兵投票选出的leader会进行故障转移，选出新的主节点，原来的从节点们会向新的主节点发起复制，这个配置就是控制在故障转移之后，每次可以向新的主节点发起复制的节点的个数，最多为<nums>个，因为如果不加控制会对主节点的网络和磁盘IO资源很大的开销。
+
+**配置四：sentinel failover-timeout <master-name>  <times>**
+
+ 这个代表哨兵进行故障转移时如果超过了配置的<times>时间就表示故障转移超时失败。
+
+**配置五： sentinel auth-pass <master-name> <password>**
+
+### 主观下线与与客观下线
+
+sentinel对于不可用有两种不同的看法，一个叫主观不可用(SDOWN),另外一个叫客观不可用(ODOWN)。
+
+主观不可用是sentinel自己主观上检测到的关于master的状态。
+
+客观不可用需要一定数量的sentinel达成一致意见才能认为一个master客观上已经宕掉，各个sentinel之间通过命令 **SENTINEL is_master_down_by_addr** 来获得其它sentinel对master的检测结果。
+
+从sentinel的角度来看，如果发送了PING心跳后，在一定时间内没有收到合法的回复，就达到了SDOWN的条件。这个时间在配置中通过 **is-master-down-after-milliseconds** 参数配置。
+
+当sentinel发送PING后，以下回复都被认为是合法的,除此之外，其它任何回复（或者根本没有回复）都是不合法的。
+
+### **Sentinel之间和Slaves之间的自动发现机制**
+
+虽然sentinel集群中各个sentinel都互相连接彼此来检查对方的可用性以及互相发送消息。但是你不用在任何一个sentinel配置任何其它的sentinel的节点。因为sentinel利用了master的发布/订阅机制去自动发现其它也监控了统一master的sentinel节点。
+
+通过向名为`__sentinel__:hello`的管道中发送消息来实现。
+
+同样，你也不需要在sentinel中配置某个master的所有slave的地址，sentinel会通过询问master来得到这些slave的地址的。
+
+每个sentinel通过向每个master和slave的发布/订阅频道`__sentinel__:hello`每秒发送一次消息，来宣布它的存在。
+每个sentinel也订阅了每个master和slave的频道`__sentinel__:hello`的内容，来发现未知的sentinel，当检测到了新的sentinel，则将其加入到自身维护的master监控列表中。
+每个sentinel发送的消息中也包含了其当前维护的最新的master配置。如果某个sentinel发现
+自己的配置版本低于接收到的配置版本，则会用新的配置更新自己的master配置。
+
+在为一个master添加一个新的sentinel前，sentinel总是检查是否已经有sentinel与新的sentinel的进程号或者是地址是一样的。如果是那样，这个sentinel将会被删除，而把新的sentinel添加上去。
+
+- 
+
+  第一行的格式如下：
+
+  ```
+  sentinel monitor [master-group-name] [ip] [port] [quorum]
+  ```
+
+  master-group-name：master名称
+
+  quorun：本文叫做票数，Sentinel需要协商同意master是否可到达的数量。
+
+  ```
+  sentinel monitor mymaster 127.0.0.1 6379 2
+  ```
+
+  这一行用于告诉Redis监控一个master叫做mymaster，它的地址在127.0.0.1，端口为6379，票数是2。
+
+  这里的票数需要解释下：举个栗子，redis集群中有5个sentinel实例，其中master挂掉啦，如果这里的票数是2，表示有2个sentinel认为master挂掉啦，才能被认为是正真的挂掉啦。其中sentinel集群中各个sentinel也有互相通信，通过gossip协议。
+
+  除啦第一行其他的格式如下：
+
+  ```
+  sentinel [option_name] [master_name] [option_value]
+  ```
+
+  - **down-after-milliseconds**
+    sentinel会向master发送心跳PING来确认master是否存活，如果master在“一定时间范围”内不回应PONG 或者是回复了一个错误消息，那么这个sentinel会主观地认为这个master已经不可用了。而这个down-after-milliseconds就是用来指定这个“一定时间范围”的，单位是毫秒。
+
+  - **parallel-syncs**
+    在发生failover主从切换时，这个选项指定了最多可以有多少个slave同时对新的master进行同步，这个数字越小，完成主从故障转移所需的时间就越长，但是如果这个数字越大，就意味着越多的slave因为主从同步而不可用。可以通过将这个值设为1来保证每次只有一个slave处于不能处理命令请求的状态。
+
+   如果主节点设置了密码，则需要这个配置，否则哨兵无法对主节点进行监控。
+
+## Cluster模式
 
 
 

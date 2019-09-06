@@ -125,7 +125,191 @@ keySet 其实是遍历了 2 次，一次是转为 Iterator 对象，另一次是
           });
    ```
 
-### ConCurrentHashmap
+      ### 源码分析
+
+##### put方法
+
+```
+ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+                   boolean evict) {
+        Node<K,V>[] tab; Node<K,V> p; int n, i;
+        
+        //如果数组为空，则进行扩容
+        if ((tab = table) == null || (n = tab.length) == 0)
+            n = (tab = resize()).length;
+            
+         如果hash运算后的位置数据为空，则直接插入。
+        if ((p = tab[i = (n - 1) & hash]) == null)
+            tab[i] = newNode(hash, key, value, null);
+          //说明hash冲突
+        else {
+            Node<K,V> e; K k;
+            //如果与头节点equals判断相同，则进行替换
+            if (p.hash == hash &&
+                ((k = p.key) == key || (key != null && key.equals(k))))
+                e = p;
+              //判断是否为树节点，如果是进行树节点的插入
+            else if (p instanceof TreeNode)
+                e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+            else {
+            
+            //产生hash冲突并且与头节点不相等，则遍历链表
+                for (int binCount = 0; ; ++binCount) {
+                //如果头节点的下一个节点为空，则进行插入  标记1
+                    if ((e = p.next) == null) {
+                        p.next = newNode(hash, key, value, null);
+                        //接着判断大小是否超过红黑树阈值，如果查过，则转化为红黑树
+                        if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                            treeifyBin(tab, hash);
+                        break;
+                    }
+      
+                    //如果equals方法相等
+                    if (e.hash == hash &&
+                        ((k = e.key) == key || (key != null && key.equals(k))))
+                        break;
+                    //如果equals不相等则把当前位置赋值给p，进行判断上面标记1处的判断
+                    p = e;
+                }
+            }
+            //上面有两个判断产生hashcode与equals相等，一个是在头节点，一个实在链表内部，则进行数据的替换
+            if (e != null) { // existing mapping for key
+                V oldValue = e.value;
+                if (!onlyIfAbsent || oldValue == null)
+                    e.value = value;
+                afterNodeAccess(e);
+                return oldValue;
+            }
+        }
+        ++modCount;
+        if (++size > threshold)
+            resize();
+        afterNodeInsertion(evict);
+        return null;
+    }
+```
+
+步骤：
+
+- 判断集合是否为空，如果为空，进行空数组的扩容。
+- 如果hash运算后的位置数据为空，则直接插入。
+- 如果第二步中数据不为空，判断头节点是否hash相等，如果想等则进行替换
+- 如果为树节点，调用树节点的插入方法
+- 如果产生hash冲突，并且与头节点不相等，则遍历链表，如果头节点的下一个节点为空，则进行插入，并判断是否超过红黑树的阈值
+- 如果上一步判断不成立，则判断equals是否i相等，若相等，则进行数据替换，如果不相等，继续遍历
+
+##### resize方法
+
+```
+final Node<K,V>[] resize() {
+    Node<K,V>[] oldTab = table;
+    int oldCap = (oldTab == null) ? 0 : oldTab.length;
+    int oldThr = threshold;
+    int newCap, newThr = 0;
+    //数组容量数据相关判断及赋值
+    if (oldCap > 0) {
+        if (oldCap >= MAXIMUM_CAPACITY) {
+            threshold = Integer.MAX_VALUE;
+            return oldTab;
+        }
+        else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
+                 oldCap >= DEFAULT_INITIAL_CAPACITY)
+            newThr = oldThr << 1; // double threshold
+    }
+    else if (oldThr > 0) // initial capacity was placed in threshold
+        newCap = oldThr;
+        
+        //新数组的初始化  
+    else {               // zero initial threshold signifies using defaults
+        newCap = DEFAULT_INITIAL_CAPACITY;
+        newThr = (int)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);
+    }
+    if (newThr == 0) {
+        float ft = (float)newCap * loadFactor;
+        newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
+                  (int)ft : Integer.MAX_VALUE);
+    }
+    threshold = newThr;
+    @SuppressWarnings({"rawtypes","unchecked"})
+        Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+    //高并发下应该此处也应该会导致get为null
+    table = newTab;
+    
+    //如果原数组不为空
+    if (oldTab != null) {
+    //遍历数组中数据
+        for (int j = 0; j < oldCap; ++j) {
+            Node<K,V> e;
+            //如果有数据
+            if ((e = oldTab[j]) != null) {
+            //高并发下数据丢失原因
+                oldTab[j] = null;
+                //如果数组此处只有一个数据，直接进行数据的移动
+                if (e.next == null)
+                    newTab[e.hash & (newCap - 1)] = e;
+                    
+                  //如果是树节点情况
+                else if (e instanceof TreeNode)
+                    ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+                 //如果数组此处是链表，则进行遍历，并且保持数据的顺序一致，不会产生高并发下的死循环问题
+                  //hash算法会把当前数据还在数组的这个位置，或者在原数组下标+原数组总长度的位置
+                else { // preserve order
+                   //维护此位置头节点与尾节点
+                    Node<K,V> loHead = null, loTail = null;
+                    //维护原数组下标+原数组长度的位置的头节点与尾节点
+                    Node<K,V> hiHead = null, hiTail = null;
+                    Node<K,V> next;
+                    
+                    //进行do while遍历链表中的数据
+                    do {
+                        next = e.next;
+                        //如果经过运算之后头节点数据还在此位置，
+                        if ((e.hash & oldCap) == 0) {
+                        //如果尾节点为空，设置为头节点
+                            if (loTail == null)
+                                loHead = e;
+                         //如果头节点不为空 则把数据添加到尾部
+                            else
+                                loTail.next = e;
+                          //设置尾节点引用
+                            loTail = e;
+                        }
+                        //如果经过运算后数据不再此位置而是在原下标+原数组长度位置
+                        else {
+                            //继续进行尾节点是否为空处理，与上面一样
+                            if (hiTail == null)
+                                hiHead = e;
+                            else
+                                hiTail.next = e;
+                            hiTail = e;
+                        }
+                    }while ((e = next) != null);
+                    //进行对数据处理
+                    
+                    //如果原位置尾节点数据不为空，则把数据添加
+                    if (loTail != null) {
+                        loTail.next = null;
+                        newTab[j] = loHead;
+                    }
+                    //如果新位置元素不为空，则把数据添加
+                    if (hiTail != null) {
+                        hiTail.next = null;
+                        newTab[j + oldCap] = hiHead;
+                    }
+                }
+            }
+        }
+    }
+    return newTab;
+}
+```
+
+JDK1.8中高并发存在问题
+
+- 高并发下put会产生覆盖
+- get数据为null
+
+# ConCurrentHashmap
 
 使用CAS与在操作hash值相同的链表的头结点还是会synchronized上锁，这样才能保证线程安全。
 

@@ -34,6 +34,10 @@ Queue（队列）类似邮箱。依存于RabbitMQ内部。虽然消息通过Rabb
 - 配置业务队列，绑定到业务交换机上，为业务队列配置死信交换机和路由key也就是配置 arguments.put("x-dead-letter-exchange","自己生命的死信队列名") 
 - 消费者监听死信队列并进行消息消费
 
+### 延时队列
+
+延时发送消息可以利用死信队列实现，设置TTL消息，消息过期就会发送到死信队列。TTL就是延时时间
+
 ## 转发器
 
 ### Fanout
@@ -425,7 +429,7 @@ void basicPublish(String exchange, String routingKey, boolean mandatory, boolean
 
 **手动ACK**
 
-在手动ACK前提下消费端限流 ，qos，如果没有ACK 则不会进行消费新的消息
+在手动ACK前提下消费端限流 ，设置QOS,spring中设置spring.rabbitmq.listener.simple.prefetch=1代表消费者一次只能接受一个消息，如果不ACK则不接收下一条消息，如果没有ACK 则不会进行消费新的消息
 
 ### 消息保障100%投递成功
 
