@@ -500,13 +500,147 @@ sentinel对于不可用有两种不同的看法，一个叫主观不可用(SDOWN
 
 ## Cluster模式
 
+### 正常启动redis服务
+
+配置文件
+
+```
+port 设置端口 
+
+daemonize  设置是否以守护进程开启
+
+dir  设置目录，例如日志，rdb文件等等
+
+dbfilename  设置rdb文件名
+
+logfile   设置日志文件名
+
+cluster-enabled yes  是否开启集群模式
+
+cluster-config-file  集群节点的单独配置
+
+cluster-node-timeout  超时时间，有很多用处，例如ping的有效时间，一般默认配置即可，如果ping超过，则认为节点不可用
+
+cluster-require-full-coverage 用来设置什么情况下集群可以对外提供服务，yes表示只有集群节点
+
+都正常才提供对外服务，一般生产环境设置为no
+
+```
+
+redis-server + 配置文件启动redis服务
+
+### 配置集群互相发现
+
+meet配置
+
+```
+redis-cli -h 127.0.0.1 -p 6379  cluster meet 127.0.0.1 6380
+
+连接6379端口的服务器，按照上述方式依次对7001-7005（集群中其他节点）的端口进行握手
+```
+
+### hash槽配置
+
+redis总共有16384个槽点，并且只有主节点需要分配槽点
+
+```
+ redis-cli -h 127.0.0.1 -p 6379 cluster addslots 0 1 2
+```
+
+### 主从配置 
+
+```
+redis-cli -h 127.0.0.1 -p 7003（从节点端口号） cluster replicate nodeid（主节点nodeid）
+```
+
+注意nodeid和runid的区别，nodeid重启之后也是不会改变的，但是runid一般重启之后就会改变。那么如果获取nodeid呢，执行如下命令：
+
+```
+redis-cli -p 6379 cluster nodes
+```
+
+### 集群扩容
+
+步骤 
+
+- 启动新节点
+- meet操作加入急群众
+- 为新节点分配hash槽（也就是数据迁移），把对应槽的数据迁移到新节点上（源节点槽及数据--->新节点），建议使用ruby reshard命令进行迁移
+
+### 集群缩容
+
+- 下线迁移槽
+
+使用ruby的reshard命令
+
+- 忘记节点
+
+  先下从节点，在下主节点，不然会触发自动故障转移
+
+   在需要忘记其他节点的客户端上执行命令如6379 忘记7000节点，在6379节点执行命令
+
+  ```
+   cluster forget(downNodeId) 被忘记节点ID
+  ```
+
+  ruby命令删除节点命令
+
+- 关闭节点
+
+### moved重定向和ASK重定向
+
+**1、moved**
+
+客户端发送命令给集群中的节点，经过crc计算，如果落入的槽在自己的节点内，则执行命令，反之给客户端发送真正的目标节点，然后在重新向真正的节点发送命令
+
+**发生在槽迁移结束**
+
+算出对应key的槽命令
+
+```
+127.0.0.1:7002> cluster keyslot hello
+(integer) 866
 
 
+127.0.0.1:7002> get hello
+(error) MOVED 866 127.0.0.1:7000
+```
 
+**2、ASK**
 
+如果发送命令是真正的节点，但是正在进行槽迁移，**发生在槽还在迁移中**
 
+### 故障发现
 
+通过ping/pong消息实现故障发现：不需要sentinel
 
+#### 主观下线
+
+某个节点任务另一个节点不可用
+
+#### 主观下线
+
+半数以上节点任务不可用
+
+#### 故障恢复
+
+让故障的主节点的从节点成为主节点
+
+- 资格检查
+
+每个从节点与故障主节点短线时间，超过cluster-node-timeout cluster-salve-validity-factory取消资格
+
+- 准备选举时间
+- 选举投票
+- 让从节点替换主节点
+
+### 集群限制
+
+key批量操作支持有限：例如 mget mset必须在一个slot
+
+key事务和Lua支持：操作的key必须在一个节点
+
+大多数情况下不需要集群架构，哨兵即可
 
 
 
