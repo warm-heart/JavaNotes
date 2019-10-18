@@ -110,7 +110,7 @@ protected Object createBean(String beanName, RootBeanDefinition mbd, Object[] ar
 
 **resolveBeforeInstantiation方法中BeanPostProcessors处理器的使用**
 
-先给BeanPostProcessors机会进行实例化的前置处理，当经过前置处理后返回的结果如果不为空，那么会直接略过后续的 bean 的创建而直接返 回结果。 这一特性虽然很容易被忽略，但是却起着至关重要的作用，我们熟知的 AOP 功能就 是基于这里的判断的。
+先给BeanPostProcessors机会进行实例化的前置处理，当经过前置处理后返回的结果如果不为空，那么会直接略过后续的 bean 的创建而直接返 回结果。 这一特性虽然很容易被忽略，但是却起着至关重要的作用，AOP 功能就是基于这里的判断的。
 
 ```
 	protected Object resolveBeforeInstantiation(String beanName, RootBeanDefinition mbd) {
@@ -299,9 +299,9 @@ protected void populateBean(String beanName, RootBeanDefinition mbd, BeanWrapper
 
 - **激活Aware方法**  例如beanFactoryAware接口
 
-- **BeanPostProcessors处理器的应用**  ，在调用客户 自定义初始化方法前以及调用自定义初始化方法后分别会调用 BeanPostProcessor 的 postProcessBeforelnitialization 和 postProcessAfterlnitialization 方法，使用 户可以根据自己的业务需求进行响应的处理。 
+- **BeanPostProcessors处理器的应用**  ，在调用客户自定义初始化方法前以及调用自定义初始化方法后分别会调用 BeanPostProcessor 的 postProcessBeforelnitialization 和 postProcessAfterlnitialization 方法，使用 户可以根据自己的业务需求进行响应的处理。 
 
-- **invokeInitMethods初始化方法应用**，客户定制的初始化方法除了我们熟知的使用配置 init-method 外，还有使 自定义的 bean 实 现 **InitializingBean** 接口，并在 afterPropertiesSet 中实现自己的初始化业务逻辑。 init-method 与 afterPropertiesSet 都是在初始化 b巳an 时执行，执行顺序是 afterPropertiesSet 先执行，而 init-method 后执行。 在 invokelnitMethods 方法中就实现了这两个步骤的初始化方法调用。 
+- **invokeInitMethods初始化方法应用**，客户定制的初始化方法除了我们熟知的使用配置 init-method 外，还有使 自定义的 bean 实 现 **InitializingBean** 接口，并在 afterPropertiesSet 中实现自己的初始化业务逻辑。 init-method 与 afterPropertiesSet 都是在初始化 bean 时执行，执行顺序是 afterPropertiesSet 先执行，而 init-method 后执行。 在 invokelnitMethods 方法中就实现了这两个步骤的初始化方法调用。 
 
 ```
 //初始化

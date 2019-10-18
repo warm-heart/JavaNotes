@@ -410,4 +410,28 @@ final V putVal(K key, V value, boolean onlyIfAbsent) {
 节点，则将此节点插入树中即可。插入成功后，进行 5
 
 5、如果table[i]的节点是链表节点，则检查table的第i个位置的链表是否需要转化为数，如果需要则调用treeifyBin函数进行转化
-、
+
+# Collection工具类
+
+## 对List排序
+
+前提是list中所有数据实现**Comparable**接口
+
+```
+java.util.Collections.sort(list);
+```
+
+## unmodifiableCollection
+
+返回一个集合的镜像，并且这个镜像不可以做任何修改操作，只可以读，修改原集合数据的同时镜像集合数据也会修改
+
+```
+      List list1 = java.util.Collections.unmodifiableList(list);
+      System.out.println(list1);
+      list.add("g");
+      System.out.println(list1);
+```
+
+## synchronizedCollection
+
+把线程不安全的容器变成线程安全的容器。
