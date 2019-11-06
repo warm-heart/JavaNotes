@@ -452,7 +452,7 @@ void basicPublish(String exchange, String routingKey, boolean mandatory, boolean
 
 　　4、接收到confirm，对message状态更改
 
-　　5、分布是定时任务获取消息的状态
+　　5、分布式 定时任务获取消息的状态
 
 　　6、如果消息不能成功投递，重新进行发送，记录重发次数
 
@@ -460,17 +460,17 @@ void basicPublish(String exchange, String routingKey, boolean mandatory, boolean
 
 **2、消息延迟投递，做二次确认，回调检查，适合高并发环境，减少写库的次数**
 
-​      1、上游服务首先将业务代码入库，发送message给Broker
+​      1、上游服务首先将业务数据入库，发送message给Broker
 
 　　2、发送第二个延迟确认消息
 
 　　3、下游服务监听消息进行消费
 
-　　4、发送确认消息，这里不是confirm机制，而是一条新的消息
+　　4、消息消费成功之后，发送一个确认消费消息
 
-　　5、通过回调服务监听这个confirm消息，然后把消息进行入库
+　　5、通过回调服务监听收到消费者的确认消息，消费成功之后，做消息的持久化存储
 
-　　6、回调服务检查到延迟确认消息，会数据库查询是否有这条消息
+　　6、回调服务接受到延迟确认消息，会数据库查询是否有这条消息
 
 　　7、如果没有查到这条消息，回调服务通过RPC给一个重新发送命令到上游系统
 
