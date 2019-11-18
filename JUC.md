@@ -207,12 +207,12 @@ final boolean acquireQueued(final Node node, int arg) {
 }
 ```
 
-标记1是线程唤醒后尝试获取锁的过程。如果前一个节点正好是head，表示自己排在第一位，可以马上调用tryAcquire尝试。如果获取成功就简单了，直接修改自己为head。这步是实现公平锁的核心，保证释放锁时，由下个排队线程获取锁。（看到线程解锁时，再看回这里啦）
+**标记1**是线程唤醒后尝试获取锁的过程。如果前一个节点正好是head，表示自己排在第一位，可以马上调用tryAcquire尝试。如果获取成功就简单了，直接修改自己为head。这步是实现公平锁的核心，保证释放锁时，由下个排队线程获取锁。（看到线程解锁时，再看回这里啦）
 
-标记2是线程获取锁失败的处理。这个时候，线程可能等着下一次获取，也可能不想要了，Node变量waitState描述了线程的等待状态，一共四种情况：
+**标记2**是线程获取锁失败的处理。这个时候，线程可能等着下一次获取，也可能不想要了，Node变量waitState描述了线程的等待状态，一共四种情况：
 
 ```java
-static final int CANCELLED =  1;   //取消
+ bstatic final int CANCELLED =  1;   //取消
 static final int SIGNAL    = -1;     //下个节点需要被唤醒
 static final int CONDITION = -2;  //线程在等待条件触发
 static final int PROPAGATE = -3; //（共享锁）状态需要向后传播
