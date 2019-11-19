@@ -210,7 +210,7 @@ public Object deepClone() throws IOException, ClassNotFoundException {
 
 体验开启一个线程
 
-可以看到返回表达式返回值是一个Runnable接口，接口实例作为Thread的入参。
+可以看到返回表达式返回值是一个Runnable接口的具体实现。
 
 ```
 new Thread(() -> System.out.println("lambda开启线程   " +"线程名："+Thread.currentThread().getName()),
