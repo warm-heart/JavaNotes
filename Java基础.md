@@ -1,3 +1,11 @@
+## List转数组
+
+一定要在参数里加上new String[] 不然会报ClassCastException
+
+```
+String res[] = result.toArray(new String[0]);
+```
+
 # ==和equals
 
 ### 判空防止空指针
