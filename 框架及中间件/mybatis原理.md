@@ -209,7 +209,7 @@ public Object execute(SqlSession sqlSession, Object[] args) {
       //构建StatementHandler
       StatementHandler handler = configuration.newStatementHandler(this, ms, parameter, RowBounds.DEFAULT, null, null);
       
-      //获取Statement，主要表现为从数据源connection回去对应的prepareStatement或者Statement
+      //获取Statement，主要表现为从数据源connection获取对应的prepareStatement或者Statement
       stmt = prepareStatement(handler, ms.getStatementLog());
       return handler.update(stmt);
     } finally {
@@ -439,11 +439,38 @@ sqlSession.clearCache();
 
 ## 二级缓存原理
 
+**二级缓存开关 cacheEnable（mybatis全部配置中）默认开启，但不是决定性条件，mybatis二级缓存的真正开启条件是mapper中的<cache>标签，当解析到cache标签时，会为mapperStatement对象创建Cache对象，如果没有标签，不会创建对象。**
+
+```
+
+  @Override
+  public <E> List<E> query(MappedStatement ms, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql)
+      throws SQLException {
+    Cache cache = ms.getCache();        获取二级缓存对象
+   如果创建了二级缓存对象则会从缓存查数据
+    if (cache != null) {
+      flushCacheIfRequired(ms);
+      if (ms.isUseCache() && resultHandler == null) {
+        ensureNoOutParams(ms, parameterObject, boundSql);
+        @SuppressWarnings("unchecked")
+        List<E> list = (List<E>) tcm.getObject(cache, key);
+        if (list == null) {
+          list = delegate.<E> query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
+          tcm.putObject(cache, key, list); // issue #578 and #116
+        }
+        return list;
+      }
+    }
+     如果没有创建对象，则会直接执行代理对象的query方法
+    return delegate.<E> query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
+  }
+```
+
 key 与一级缓存相同
 
 多个sqlSession共享
 
-查询操作会先把数据存储到TransactionalCacheManager中的TransactionalCache中，sqlSession提交过后会把TransactionalCache二级缓存只有sqlSession提交过后才会生效，把TransactionalCache中的数据存储到PerpetualCache对象中，MapperStatement持有PerpetualCache对象。
+查询操作会先把数据存储到TransactionalCacheManager中的TransactionalCache中，TransactionalCache二级缓存只有sqlSession提交过后才会生效，sqlSession提交过后会把TransactionalCache中的数据存储到PerpetualCache对象中，MapperStatement持有PerpetualCache对象。
 
 ```
 public class TransactionalCacheManager {

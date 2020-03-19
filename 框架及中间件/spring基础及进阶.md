@@ -353,6 +353,53 @@ protected void registerDisposableBeanIfNecessary(String beanName, Object bean, R
 
 ```
 
+# 循环依赖
+
+A依赖B，B依赖A
+
+只可以解决属性注入循环以来，构造器注入和非单例无法解决。
+
+利用三级缓存
+
+```
+/** Cache of singleton objects: bean name --> bean instance */
+	private final Map<String, Object> singletonObjects = new ConcurrentHashMap<String, Object>(256);
+
+	/** Cache of singleton factories: bean name --> ObjectFactory */
+	private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<String, ObjectFactory<?>>(16);
+
+	/** Cache of early singleton objects: bean name --> bean instance */
+	private final Map<String, Object> earlySingletonObjects = new HashMap<String, Object>(16);
+```
+
+流程：
+
+1：创建A 先从完整的singletonObjects（存放完整的单例对象） 中获取，如果获取不到就进入doCreateBean方法创建，
+
+为了解决循环依赖，将添加到singletonFactories（从ObjectFactory.getObject可以获取引用）
+
+2：接下来进行属性填充populateBean方法填充属性B，发现B没创建，于是创建B，重复步骤1，属性填充A调用getBean，getBean调用doGetBean方法，doGetBean方法先调用getSingleton方法获取A，发现A在singletonFactories缓存中，然后将A放入earlySingletonObjects中并将A从singletonFactories缓存中移除，然后返回A，B中填充A成功，完成B的创建，将B放入到singletonObjects中，回到创建A过程中的属性填充B，完成A的创建后将A从earlySingletonObjects放入到singletonObjects中，完成A,B的创建，并且解决循环依赖。
+
+```
+protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+		Object singletonObject = this.singletonObjects.get(beanName);
+		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			synchronized (this.singletonObjects) {
+				singletonObject = this.earlySingletonObjects.get(beanName);
+				if (singletonObject == null && allowEarlyReference) {
+					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+					if (singletonFactory != null) {
+						singletonObject = singletonFactory.getObject();
+						this.earlySingletonObjects.put(beanName, singletonObject);
+						this.singletonFactories.remove(beanName);
+					}
+				}
+			}
+		}
+```
+
+
+
 # spring中有关接口使用
 
 新建测试用类BeanTest

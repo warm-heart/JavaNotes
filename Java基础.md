@@ -159,6 +159,22 @@ Java中的泛型基本上都是在编译器这个层次来实现的。在生成�
 
 抽象类是可以有私有方法或私有变量的，通过把类或者类中的方法声明为abstract来表示一个类是抽象类，被声明为抽象的方法不能包含方法体。子类实现方法必须含有相同的或者更高的访问级别(public->protected->private)。抽象类的子类为父类中所有抽象方法的具体实现，否则也是抽象类。
 
+# 静态内部类和非静态内部类
+
+静态内部类：
+
+*  可以有静态方法及静态变量
+* 只能访问外部类的静态成员及静态方法
+* 创建静态内部类实例不需要依赖外部类实例
+
+***
+
+非静态内部类：
+
+* 不可以有静态方法及静态变量（只能定义非静态变量和非静态方法）
+* 能访问外部类的静态方法、变量和非静态方法、变量
+* 创建非静态内部类实例依赖外部类实例
+
 # 克隆
 
 在实际编程过程中，我们常常要遇到这种情况：有一个对象A，在某一时刻A中已经包含了一些有效值，此时可能 会需要一个和A完全相同新对象B，并且此后对B任何改动都不会影响到A中的值，也就是说，A与B是两个独立的对象，但B的初始值是由A对象确定的。在 Java语言中，用简单的赋值语句是不能满足这种需求的。要满足这种需求虽然有很多途径，但实现clone（）方法是其中最简单，也是最高效的手段。 
@@ -211,6 +227,41 @@ public Object deepClone() throws IOException, ClassNotFoundException {
         return ois.readObject();
     }
 ```
+
+### Java集合里的clone都是浅克隆
+
+如果存储引用类型变量，先获取引用变量，然后改变引用类型变量，则两个集合都会被改变。
+
+```
+
+        ArrayList<Animal> list = new ArrayList();
+        Animal animal = new Animal("first", "red");
+        list.add(animal);
+        ArrayList<Animal> list1 = (ArrayList<Animal>) list.clone();
+        System.out.println("修改前");
+        System.out.println(list);
+        System.out.println(list1);
+
+        Animal animal1 = list1.get(0);
+        animal1.setName("next");
+        //这样不会被改变，因为把第二个集合的指针第0个索引指向新对象，而第一个集合的第0
+        个位置指针没变，所以只改变第二个，上面一种情况因为同时改变了同一个引用变量的状态，所以两个集合都被改变。
+         //Animal animal1 = new Animal("next", "red");
+        //list1.set(0, animal1);
+        System.out.println("修改后");
+        System.out.println(list);
+        System.out.println(list1);
+        
+        
+  修改前
+[Animal{name='first', color='red', desc='Animal', father='father中变量'}]
+[Animal{name='first', color='red', desc='Animal', father='father中变量'}]
+修改后
+[Animal{name='next', color='red', desc='Animal', father='father中变量'}]
+[Animal{name='next', color='red', desc='Animal', father='father中变量'}]
+```
+
+
 
 # lambda
 
