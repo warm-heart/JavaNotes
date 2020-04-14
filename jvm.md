@@ -14,7 +14,7 @@
 
 # java程序执行
 
-![Javaload](C:\Users\wangqianlong\Desktop\Java\images\Javaload.jpg)
+![JavaLoad](assets/JavaLoad.jpg)
 
 如上图所示，首先Java源代码文件(.java后缀)会被Java编译器编译为字节码文件(.class后缀)，然后由JVM中的类加载器加载各个类的字节码文件，加载完毕之后，交由JVM执行引擎执行。在整个程序执行过程中，JVM会用一段空间来存储程序执行期间需要用到的数据和相关信息，这段空间一般被称作为Runtime Data Area（运行时数据区），也就是我们常说的JVM内存。因此，在Java中我们常常说到的内存管理就是针对这段空间进行管理（如何分配和回收内存空间）
 
@@ -38,9 +38,7 @@ java中的堆是用来存储对象本身的以及数组（数组引用是存放�
 
 局部变量表用来存储方法中的局部变量（包括在方法中声明的非静态变量以及函数形参）。对于基本数据类型的变量，则直接存储它的值，对于引用类型的变量，则存的是指向对象的引用。局部变量表的大小在编译器就可以确定其大小了，因此在程序执行期间局部变量表的大小是不会改变的
 
-###  ![JavaStatck](C:\Users\wangqianlong\Desktop\Java\images\JavaStatck.jpg)
-
-
+![JavaStatck](assets/JavaStatck.jpg)
 
 # 类加载
 

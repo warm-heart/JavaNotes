@@ -12,6 +12,12 @@ spring根据配置文件解析xml生成bean的定义实例，常见标签有
 
 xml解析完成之后，spring会进行bean的加载、实例化。
 
+bean的创建策略有三种
+
+- 实例工厂
+- 静态工厂
+- 默认构造方法
+
 #### getBean方法
 
 获取bean从BeanFactory的getBean方法进入

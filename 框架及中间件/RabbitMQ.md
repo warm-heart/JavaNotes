@@ -48,11 +48,7 @@ fanout类型转发器特别简单，把所有它介绍到的消息，**广播到
 
 RabbitMQ消息模型的核心理念是生产者永远不会直接发送任何消息给队列，一般的情况生产者甚至不知道消息应该发送到哪些队列。相反的，生产者只能发送消息给转发器（Exchange）。转发器是非常简单的，一边接收从生产者发来的消息，另一边把消息推送到队列中。转发器必须清楚的知道消息如何处理它收到的每一条消息。是否应该追加到一个指定的队列？是否应该追加到多个队列？或者是否应该丢弃？这些规则通过转发器的类型进行定义。
 
-![20140710155416598](C:\Users\wangqianlong\Desktop\Java\images\20140710155416598.png)
-
-
-
-
+![rabbit-fanout](assets/rabbit-fanout.png)
 
 ### Direct
 
@@ -60,7 +56,7 @@ RabbitMQ消息模型的核心理念是生产者永远不会直接发送任何消
 
 direct类型的转发器背后的路由转发算法很简单：消息会被推送至绑定键（binding key）和消息发布附带的选择键（routing key）完全匹配的队列。
 
-![20140710221736389](C:\Users\wangqianlong\Desktop\Java\images\20140710221736389.png)
+![rabbitmq-direct](assets/rabbitmq-direct.png)
 
 上图，我们可以看到direct类型的转发器与两个队列绑定。第一个队列与绑定键error绑定，第二个队列与转发器间有三个绑定，一个与绑定键info绑定，另一个与error绑定键绑定,第三个与warning绑定键绑定。
 这样的话，当一个消息附带一个选择键（routing key） error发布至转发器将会被导向到上面的队列。消息附带一个选择键（routing key）info或者error和warning将会被导向到第二个队列。
@@ -72,9 +68,9 @@ direct类型的转发器背后的路由转发算法很简单：消息会被推�
 *可以匹配一个标识符。
 #可以匹配0个或多个标识符。
 
-![20140711231018486](C:\Users\wangqianlong\Desktop\Java\images\20140711231018486.png)
+![rabbitmq-topic ](assets/rabbitmq-topic .png)
 
-我们准备发送关于动物的消息。消息会附加一个选择键包含3个标识符（两个点隔开）。第一个标识符描述动物的速度，第二个标识符描述动物的颜色，第三个标识符描述动物的物种：<speed>.<color>.<species>。
+我们准!备发送关于动物的消息。消息会附加一个选择键包含3个标识符（两个点隔开）。第一个标识符描述动物的速度，第二个标识符描述动物的颜色，第三个标识符描述动物的物种：<speed>.<color>.<species>。
 我们创建3个绑定键：Q1与*.orange.*绑定Q2与*.*.rabbit和lazy.#绑定。
 可以简单的认为:
 Q1对所有的橙色动物感兴趣。

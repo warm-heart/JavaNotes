@@ -164,16 +164,26 @@ Java中的泛型基本上都是在编译器这个层次来实现的。在生成�
 静态内部类：
 
 *  可以有静态方法及静态变量
-* 只能访问外部类的静态成员及静态方法
-* 创建静态内部类实例不需要依赖外部类实例
+*  只能访问外部类的静态成员及静态方法
+*  创建静态内部类实例不需要依赖外部类实例
+*  创建：staticInner staticInner = new staticInnerClass.staticInner();
 
 ***
 
 非静态内部类：
 
 * 不可以有静态方法及静态变量（只能定义非静态变量和非静态方法）
+
 * 能访问外部类的静态方法、变量和非静态方法、变量
+
 * 创建非静态内部类实例依赖外部类实例
+
+* 创建：
+
+  ```
+  InnerClass innerClass = new InnerClass();
+  inner inner = innerClass.new inner();
+  ```
 
 # 克隆
 

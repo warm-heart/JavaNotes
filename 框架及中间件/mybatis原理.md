@@ -564,3 +564,43 @@ commit操作会把数据转存到真正的二级缓存区域
 
 
 
+## Mybatis update insert delete 返回值问题
+
+**结论： Mybatis中update insert delete 结果为匹配的行数 而不是影响的行数**
+
+**MySQL中 update 的结果**
+
+mysql>
+mysql> select * from user;
++--------+----------+--------------------------------------------------------------+------------+
+| userId | userName | password                                                     | CreateTime |
++--------+----------+--------------------------------------------------------------+------------+
+| 1      | cooper   | $2a$10$54nhhSUsz66AwapwULdzL.yOBvaFXAH8cbJSWa0mlsSFV7Wn55IC2 | NULL       |
+| 2      | warm     | $2a$10$54nhhSUsz66AwapwULdzL.yOBvaFXAH8cbJSWa0mlsSFV7Wn55IC2 | NULL       |
++--------+----------+--------------------------------------------------------------+------------+
+2 rows in set (0.81 sec)
+
+mysql> update user set userName='warm' where userId=2;
+Query OK, 0 rows affected (0.65 sec)
+Rows matched: 1  Changed: 0  Warnings: 0
+
+mysql> update user set userName='wam' where userId=2;
+Query OK, 1 row affected (0.20 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+**Mybatis 没有实际修改结果**
+
+```
+@Test
+public void update() {
+    User user = userDao.getUserByUserId("2");
+    System.out.println(user);
+
+    System.out.println(userDao.update(user));
+}
+```
+
+![1586700770824](assets/1586700770824.png)
+
+
+
