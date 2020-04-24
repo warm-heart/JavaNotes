@@ -100,7 +100,7 @@ protected boolean tryAcquire(int arg) {
 }
 ```
 
-噢，AQS的tryAcquire不能直接调用，因为是否获取锁成功是由子类决定的，直接看ReentrantLock的tryAcquire的实现。
+AQS的tryAcquire不能直接调用，因为是否获取锁成功是由子类决定的，直接看ReentrantLock的tryAcquire的实现。
 
 ```java
 protected final boolean tryAcquire(int acquires) {
@@ -486,26 +486,112 @@ unpark方法
 
 # ThreadLocal
 
-ThreadLocal set get方法都是操作Thread类中的ThreadLocalMap，这个map类就是真正存储数据的地方，key为threadlocal的实例，所以一个Thread可以具有多个Threadlocal作为key对应的键值对（value就是数据）。
+ThreadLocal的set，get方法都是操作Thread类中的ThreadLocalMap，这个map类就是真正存储数据的地方，key为threadlocal的实例，所以一个Thread可以具有多个Threadlocal作为key对应的键值对（value就是数据）。
+
+### 使用场景
+
+业务逻辑不依赖共享变量，参考SimpleDateFormat
+
+### 内存泄漏
+
+**其实是两种内存泄漏：**
+
+#### key内存泄漏
+
+通过ThreadLocal设置为弱引用解决。
+
+JVM已经解决；如果key为强引用,一旦外部没有引用ThreadLocal（用户把ThreadLocal=null），但是ThreadMap有ThreadLocal的强引用，后续不再使用ThreadLocal并且线程一直存活，此时发生key内存泄漏，故key为弱引用解决key内存泄漏。
+
+#### value内存泄漏
+
+ThreadLocal在ThreadLocalMap中是以一个弱引用身份被Entry中的Key引用的，因此如果ThreadLocal没有外部强引用来引用它，那么ThreadLocal会在下次JVM垃圾收集时被回收。**这一步解决了key的内存泄漏**。这个时候就会出现Entry中Key已经被回收，出现一个null value的情况，因此如果当前线程的生命周期很长，一直存在，那么其内部的ThreadLocalMap对象也一直生存下来，这些null key就存在一条强引用链的关系一直存在：Thread --> ThreadLocalMap-->Entry-->Value，这条强引用链会导致Entry不会回收，Value也不会回收，造成value内存泄漏。但是JVM团队已经考虑到这样的情况，并做了一些措施来保证ThreadLocal尽量不会内存泄漏：在ThreadLocal的get()、set()、remove()方法调用的时候会清除掉线程ThreadLocalMap中**所有**Key为null的Value，并将整个Entry设置为null，利于下次内存回收。
+
+**结论：**内存泄漏和弱引用没有关系，JDK解决ThreadLocal的内存泄漏正是通过key为弱引用的特性解决的，key为弱引用，如果没有其他地方引用ThreadLocal时，则GC时回收key，此时key为null解决key的内存泄漏问题，下次使用get、set、remove方法时判断key是否为null，如果为null则删除value来解决value内存泄露问题（会删除所有key为null的value）。如过key为null并且线程一直存在且不使用get、set、remove方法则value内存泄露一直存在。
+
+解决办法：使用完ThreadLocal调用remove方法。
+
+### 使用弱引用的原因
+
+官方文档的说法：
+
+> To help deal with very large and long-lived usages, the hash table entries use WeakReferences for keys.
+> 为了处理非常大和**生命周期非常长**的线程，哈希表使用弱引用作为 key。
+
+- key 使用强引用：引用的ThreadLocal的对象被回收了，但是ThreadLocalMap还持有ThreadLocal的强引用，如果没有手动删除并且线程一直存活（线程池），ThreadLocal不会被回收，导致Entry内存泄漏（key和value此时均处于内存泄露状态）。
+- key 使用弱引用：引用的ThreadLocal的对象被回收了，由于ThreadLocalMap持有ThreadLocal的弱引用，即使没有手动删除，ThreadLocal也会被回收。value在下一次ThreadLocalMap调用set,get，remove的时候会被清除。
+   比较两种情况，我们可以发现：由于ThreadLocalMap的生命周期跟Thread一样长，如果都没有手动删除对应key，都会导致内存泄漏，但是使用弱引用可以多一层保障：弱引用ThreadLocal不会内存泄漏，对应的value在下次 ThreadLocalMap调用**set,get,remove**（源码中的set，get方法会判断key是否为空，如果为空则删除value解决value的内存泄漏问题，JVM做的优化）方法的时候会被清除。
+
+因此，ThreadLocal内存泄漏的根源是：由于ThreadLocalMap的生命周期跟Thread一样长，如果没有手动删除对应key的value就会导致内存泄漏，而不是因为弱引用。
+
+内存泄漏常见的应用场景是线程池的使用，线程池的线程生命周期非常长，因此解决办法是每次业务逻辑中使用完ThreadLocal在业务代码的最后一行调用ThreadLocal的remove方法。
+
+内存泄漏在一般的线程生命周期中并不常见，因为一旦线程销毁，则ThreadMap也被回收，内存泄漏也就不存在了。
+
+### 使用不当导致线程不安全
+
+与线程池一起使用会发生线程安全问题，平常的web应用也是线程池技术（Tomcat）
+
+**同一线程执行两次任务，并且两次任务中使用同一个ThreadLLocal**，有可能造成第二次任务读取第一次任务执行业务逻辑后的脏数据。
+
+第一次任务：获取ThreadLocal的值，初始值为A，业务逻辑使用A并把A更改为B；
+
+第二次任务：获取ThreadLocal的值，此时获取到的时上一个任务修改后的值B，造成线程不安全。
+
+```
+public class UserContextHolder {
+    User user = new User();
+    ThreadLocal<User> userThreadLocal = new ThreadLocal<User>() {
+        @Override
+        protected User initialValue() {
+            return new User();
+    };
+
+    public void test() {
+        User user = userThreadLocal.get();
+        System.out.println(Thread.currentThread().getName() + "设置前:" + user.getName());
+        user.setName(Thread.currentThread().getName());
+        System.out.println(Thread.currentThread().getName() + "设置后:" + user.getName());
+        //添加这一句代码则不会发生ThreadLocal与线程池搭配使用线程不安全问题
+        //userThreadLocal.remove();
+    }
+
+
+    public static void main(String[] args) throws InterruptedException {
+  
+        UserContextHolder contextHolder = new UserContextHolder();
+        ExecutorService executorService = Executors.newFixedThreadPool(5);
+        for (int i = 0; i <10 ; i++) {
+            Thread.sleep(1000);
+            executorService.execute(()->contextHolder.test());
+        }
+
+    }
+}
+```
+
+不加userThreadLocal.remove()结果；同一个线程第二次任务读取了第一次任务的变量（脏数据）。
+
+![1587042973521](assets/1587042973521.png)
+
+加了userThreadLocal.remove()结果；上次任务后清除ThreadMap的数据，第二次任务读取不到；
+
+![1587043046532](assets/1587043046532.png)
+
+### 使用注意事项
+
+内存泄漏：如果线程的存活周期较长（线程池）最后一定要调用remove方法；
+
+线程不安全：与线程池使用一定要加remove方法。
 
 # 线程
-
-
 
 ### 线程的状态
 
 - **新建状态**：线程对象被创建后，就进入了新建状态。此时它和其他Java对象一样，仅仅由Java虚拟机分配了内存，并初始化其成员变量值。
-
 - **就绪状态**：也被称为“可执行状态”。线程对象被调用了该对象的start()方法，该线程处于就绪状态。Java虚拟机会为其创建方法调用栈和程序计数器。处于就绪状态的线程，随时可能被CPU调度执行，取决于JVM中线程调度器的调度。
-
 - **运行状态**：线程获取CPU权限进行执行。需要注意的是，线程只能从就绪状态进入到运行状态。塞状态是线程因为某种原因放弃CPU使用权，暂时停止运行。直到线程进入就绪状态，才有机会转到运行状态。阻塞的情况分三种：
-
-- **阻塞状态** （ wait（），sleep（）,yield(),join() ）
-
-  1. wait() 让当前线程进入阻塞状态，直到唤醒，会释放锁。
-  2. yield() ,sleep() 不会释放锁。
-
-  - **死亡状态**：线程执行完了、因异常退出了run()方法或者直接调用该线程的stop()方法（容易导致死锁，现在已经不推荐使用），该线程结束生命周期。
+- **阻塞状态** ：（ wait（），sleep（）,yield(),join() ），wait() 让当前线程进入阻塞状态，直到唤醒，会释放锁。yield() 和sleep() 不会释放锁。
+- **死亡状态**：线程执行完了、因异常退出了run()方法或者直接调用该线程的stop()方法（容易导致死锁，现在已经不推荐使用），该线程结束生命周期。
 
 ### **notify()、nofityAll()方法**  
 
@@ -650,8 +736,6 @@ class SafeDateForamt {
 
 说明：Executors 返回的线程池对象的弊端如下： 1）FixedThreadPool 和 SingleThreadPool:   允许的请求队列长度为 Integer.MAX_VALUE，可能会堆积大量的请求，从而导致 OOM。 2）CachedThreadPool 和 ScheduledThreadPool:   允许的创建线程数量为 Integer.MAX_VALUE，可能会创建大量的线程，从而导致 OOM。 
 
-
-
 当一个线程处于睡眠，阻塞状态时，被别的线程打断 就是抛出java.lang.InterruptedException: sleep interrupted异常
 
 MyTask
@@ -683,19 +767,26 @@ for (int i = 1; i <= 100; i++) {
 
 当调用线程池shutdownNow方法则会抛出异常
 
-corePoolSize
+corePoolSize：核心池大小，
 
-maximumPoolSize
+maximumPoolSize：最大的线程池大小	
 
-keepAliveTime
+keepAliveTime：当线程池中线程数量大于corePoolSize（核心线程数量）或设置了allowCoreThreadTimeOut（是否允许空闲核心线程超时）时，线程会根据keepAliveTime的值进行活性检查，一旦超时便销毁线程
 
-TimeUnit
+TimeUnit：keepAliveTime的时间单位
 
-BlockingQueue<Runnable>
+BlockingQueue<Runnable>：阻塞队列
 
-ThreadFatory
+ThreadFatory：
 
-RejectedExecutionHandler
+RejectedExecutionHandler：拒绝策略
 
-shutdownNow（）与shutdown（）
+shutdown（）
+
+当线程池调用该方法时,线程池的状态则立刻变成SHUTDOWN状态。此时，则不能再往线程池中添加任何任务，否则将会抛出RejectedExecutionException异常。但是，此时线程池不会立刻退出，直到添加到线程池中的所有任务都已经处理完成，才会退出。 
+
+shutdownNow（）
+
+执行该方法，线程池的状态立刻变成STOP状态，并试图停止所有正在执行的线程，不再处理还在池队列中等待的任务，当然，它会返回那些未执行的任务。 
+     它试图终止线程的方法是通过调用Thread.interrupt()方法来实现的，但是大家知道，这种方法的作用有限，如果线程中没有sleep 、wait、Condition、定时锁等应用, interrupt()方法是无法中断当前的线程的。所以，ShutdownNow()并不代表线程池就一定立即就能退出，它可能必须要等待所有正在执行的任务都执行完成了才能退出。 
 

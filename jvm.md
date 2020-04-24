@@ -1,4 +1,4 @@
-# 变量存储位置
+#  变量存储位置
 
 ### 局部变量
 
@@ -10,7 +10,7 @@
 
 ### 静态变量
 
- 堆的Class对象中
+ 堆的Class对象中，类的实例对象有一个指针指向Class对象，故可以通过类的实例调用类的静态变量。
 
 # java程序执行
 
@@ -28,9 +28,9 @@ JDK1.8中方法区的实现为元空间，在本地内存而不在JVM中，类�
 
 java中的堆是用来存储对象本身的以及数组（数组引用是存放在Java栈中的）。只不过和C语言中的不同，在Java中，程序员基本不用去关心空间释放的问题，Java的垃圾回收机制会自动进行处理。因此这部分空间也是Java垃圾收集器管理的主要区域。另外，堆是被所有线程共享的，在JVM中只有一个堆。
 
-新生代 
+新生代  占总堆区的1/3 分为 Eden，from，to；比例为8：1：1
 
-老年代
+老年代 占总堆区的2/3
 
 # Java栈
 
@@ -124,7 +124,7 @@ Java语言本身是安全的语言，它做了很多的安全校验，比如类�
 
 ### 卸载
 
-- 该类的所有实例都已经被GC，也就是JVM钟放不存在该Class的任何是例
+- 该类的所有实例都已经被GC，也就是JVM钟放不存在该Class的任何实例
 - 加载该类的ClassLoader已经被GC
 - 该类的Java.lang.Class对象没有在任何地方被引用，如不能在任何地方通过反射访问该类的方法
 
@@ -144,99 +144,352 @@ Java语言本身是安全的语言，它做了很多的安全校验，比如类�
 
 例如类java.lang.Object,它存放在rt.jar之中.无论哪一个类加载器都要加载这个类.最终都是双亲委派模型最顶端的Bootstrap类加载器去加载.因此Object类在程序的各种类加载器环境中都是同一个类.相反.如果没有使用双亲委派模型.由各个类加载器自行去加载的话.如果用户编写了一个称为“java.lang.Object”的类.并存放在程序的ClassPath中.那系统中将会出现多个不同的Object类.java类型体系中最基础的行为也就无法保证.应用程序也将会一片混乱.
 
-##### 	JVM在搜索类的时候，又是如何判定两个class是相同的呢？
+#### JVM在搜索类的时候，又是如何判定两个class是相同的呢？
 
 ​    JVM在判定两个class是否相同时，不仅要判断两个类名是否相同，而且要判断是否由同一个类加载器实例加载的。只有两者同时满足的情况下，JVM才认为这两个class是相同的。就算两个class是同一份class字节码，如果被两个不同的ClassLoader实例所加载，JVM也会认为它们是两个不同class。比如网络上的一个Java类org.classloader.simple.NetClassLoaderSimple，javac编译之后生成字节码文件NetClassLoaderSimple.class，ClassLoaderA和ClassLoaderB这两个类加载器并读取了NetClassLoaderSimple.class文件，并分别定义出了java.lang.Class实例来表示这个类，对于JVM来说，它们是两个不同的实例对象，但它们确实是同一份字节码文件，如果试图将这个Class实例生成具体的对象进行转换时，就会抛运行时异常java.lang.ClassCaseException，提示这是两个不同的类型。现在通过实例来验证上述所描述的是否正确：
 
-
-
 # JVM调优
 
-## 查看JVM运行时参数
+## JVM参数
+
+### 标准参数
+
+各个JVM版本基本不变
+
+-help:java-version 查看Java版本
+
+-server -client
+
+-version -showversion
+
+-cp -classpath
+
+### X参数
+
+非标准参数，各个JVM版本有可能不同，但变化的比较小，可以java-version 查看属于哪种模式，下图中为混合模式
+
+![1587281243157](assets/1587281243157.png)
+
+-Xint：解释执行
+
+-Xcomp：第一次使用就编译本地代码
+
+-Xmixed：混合模式：JVM自己来决定是否编译称本地代码
+
+### XX参数
+
+使用最多，各个JVM版本有可能不同。
+
+#### Boolean类型
+
++标识启用，-标识禁用
+
+格式：-XX:[+-]<name>标识启用或禁用name属性
+
+比如   -XX:+UseConcMarkSweepGc 启用CMS垃圾收集器
+
+​         -XX:+UseG1GC 启用G1垃圾收集器
+
+#### 非Boolean类型
+
+格式： -XX:<name>=<value>表示name的属性值是value
+
+比如： -XX:MaxGCPauseMillis=500  GC的最大停顿时间是500ms
+
+​            XX:GCTimeRatio=19 ； -XX:MetaSpaceSize=32M  -XX:MaxMetaSpaceSize=32M
+
+#### -Xmx -Xms
+
+  属于XX参数
+
+-Xms等价于 -XX:InitialHeapSize  初始化堆大小
+
+-Xmx等价于 -XX:MaxHeapSize  最大的堆大小
+
+## JVM运行时命令
 
 - -xx:+PrintFlagsInitial  查看运行时JVM初始值
 - -xx:+PrintFlagsFinal   查看运行时JVM最终值
 
-## JPS
+### JPS
 
 查看运行的java进程
 
 ```
 C:\Users\wangqianlong>jps -l
-256 com.example.ajax.AjaxApplication
+72 com.example.ajax.AjaxApplication
 ```
 
-## jinfo
+### jinfo
 
-  jinfo也是jvm中参与的一个命令，可以查看运行中jvm的全部参数，还可以设置部分参数。
+ jinfo也是jvm中的一个命令，可以查看运行中JVM的全部参数，还可以设置部分参数。
 
-查看堆参数
-
-```
-jinfo -flag MaxHeapSize 256(进程ID)
-```
+##### 查看堆参数
 
 ```
-C:\Users\wangqianlong>jinfo -flag MaxHeapSize 256
+C:\Users\wangqianlong>jinfo -flag MaxHeapSize 72
 -XX:MaxHeapSize=2124414976
 ```
 
-## jstat
+##### 设置参数
 
-查看jvm统计信息
+设置JVM的Boolean类型参数
 
-- 类加载
+```
+查看PrintGC
+C:\Users\wangqianlong>jinfo -flag PrintGC 11604
+-XX:+PrintGC
+//修改参数，关闭PrintGC
+C:\Users\wangqianlong>jinfo -flag -PrintGC 11604
+//查看修改后的参数
+C:\Users\wangqianlong>jinfo -flag PrintGC 11604
+-XX:-PrintGC
+```
+
+设置JVM的key，value类型的参数 命令jinfo -flag  name=value  pid
+
+### jstat
+
+查看JVM统计信息，垃圾回收信息，类加载信息，  
+
+格式： options:-class,-complier,-gc,-printcompilation
+
+#### 类加载
+
+-class
 
 ```
 
-C:\Users\wangqianlong>jstat -class 256（PID） 1000 10 每个1000ms输出一次，总共输出十次
+C:\Users\wangqianlong>jstat -class 72（PID） 1000 10 //每隔1000ms输出一次，总共输出十次
 Loaded  Bytes  Unloaded  Bytes     Time
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
-  7458 13442.3        1     0.9       6.42
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
+  7503 13519.8        0     0.0       7.37
 ```
 
+Loaded： 加载的类的个数
 
+Bytes：加载了多个k
 
-- 垃圾收集 
-- JIT编译
+Unloaded：卸载的类的个数
+
+Time：加载和卸载的时间
+
+#### 垃圾回收
+
+-gc
+
+```
+C:\Users\wangqianlong>jstat -gc 72 1000 5  //每隔1000ms输出一次，总共输出5次
+ S0C    S1C    S0U    S1U      EC       EU        OC         OU       MC     MU    CCSC   CCSU   YGC     YGCT    FGC    FGCT     GCT
+14336.0 14336.0  0.0    0.0   238592.0 220468.6  65536.0    18290.7   35456.0 33736.6 4992.0 4557.2      8    0.141   2      0.108    0.249
+14336.0 14336.0  0.0    0.0   238592.0 220468.6  65536.0    18290.7   35456.0 33736.6 4992.0 4557.2      8    0.141   2      0.108    0.249
+14336.0 14336.0  0.0    0.0   238592.0 220468.6  65536.0    18290.7   35456.0 33736.6 4992.0 4557.2      8    0.141   2      0.108    0.249
+14336.0 14336.0  0.0    0.0   238592.0 221661.6  65536.0    18290.7   35456.0 33736.6 4992.0 4557.2      8    0.141   2      0.108    0.249
+14336.0 14336.0  0.0    0.0   238592.0 221661.6  65536.0    18290.7   35456.0 33736.6 4992.0 4557.2      8    0.141   2      0.108    0.249
+```
+
+结果最后一个字母如果是C代表Current，为总容量；如果是U代表Used，为使用的大小；单位KB
+
+结果第一个字母代表堆的分区名称
+
+S0C，S1C，S0U，S1U：S0与S1的总量与使用量
+
+EC：Eden区总容量；EU：Eden区使用的容量
+
+OC：old区总容量；OU：old区使用的容量
+
+MC：元空间（MetaSpace）总容量 ；MU；MetaSpace使用的容量
+
+CCSC、CCSU：压缩类空间总量与使用量
+
+YGC、YGCT：YoungGc的次数与时间
+
+FGC、YGCT：YoungGc的次数与时间
+
+GCT：总的GC时间
+
+#### JIT编译
+
+-complier、-printcompilation
+
+```
+C:\Users\wangqianlong>jstat -compiler 72
+Compiled Failed Invalid   Time   FailedType FailedMethod
+    3871      0       0     1.41          0
+```
+
+Compiled：编译成功个数；Failed：编译失败个数；Invalid：无效的；Time：总花费时间
+
+### jmap
+
+#### 导出OOM文件
+
+分析OOM原因时导出oom文件
+
+jmap -dump：format=b,file=oom.hprof 72
+
+在C:\Users\wangqianlong目录下生成一个oom.hprof文件
+
+```
+C:\Users\wangqianlong>jmap -dump:format=b,file=oom.hprog 72
+Dumping heap to C:\Users\wangqianlong\oom.hprof ...
+Heap dump file created
+```
+
+#### 查看堆的内存分配
+
+jmap -heap 72
+
+```
+C:\Users\wangqianlong>jmap -heap 1736
+Attaching to process ID 1736, please wait...
+Debugger attached successfully.
+Server compiler detected.
+JVM version is 25.161-b12
+
+using thread-local object allocation.
+Parallel GC with 4 thread(s)
+
+Heap Configuration:
+   MinHeapFreeRatio         = 0
+   MaxHeapFreeRatio         = 100
+   MaxHeapSize              = 33554432 (32.0MB)
+   NewSize                  = 11010048 (10.5MB)
+   MaxNewSize               = 11010048 (10.5MB)
+   OldSize                  = 22544384 (21.5MB)
+   NewRatio                 = 2
+   SurvivorRatio            = 8
+   MetaspaceSize            = 21807104 (20.796875MB)
+   CompressedClassSpaceSize = 1073741824 (1024.0MB)
+   MaxMetaspaceSize         = 17592186044415 MB
+   G1HeapRegionSize         = 0 (0.0MB)
+
+Heap Usage:
+PS Young Generation
+Eden Space:
+   capacity = 8388608 (8.0MB)
+   used     = 5115576 (4.878593444824219MB)
+   free     = 3273032 (3.1214065551757812MB)
+   60.982418060302734% used
+From Space:
+   capacity = 1048576 (1.0MB)
+   used     = 131072 (0.125MB)
+   free     = 917504 (0.875MB)
+   12.5% used
+To Space:
+   capacity = 1048576 (1.0MB)
+   used     = 0 (0.0MB)
+   free     = 1048576 (1.0MB)
+   0.0% used
+PS Old Generation
+   capacity = 22544384 (21.5MB)
+   used     = 16228000 (15.476226806640625MB)
+   free     = 6316384 (6.023773193359375MB)
+   71.98245026344476% used
+
+16217 interned Strings occupying 2178280 bytes.
+```
+
+### jstack
+
+打印JVM内部所有的线程， 如果有cpu利用率飙升，有可能发生死循环或者死锁。可以利用jstack命令找到线程并分析。
+
+jstack 72（pid）
 
 # 垃圾回收
 
+## 可达性分析算法
+
+从根节点开始往下搜索，没有搜索到的对象为可回收对象，也就是该对象到根节点不可达。
+
+根节点：类加载器、Thread、虚拟机栈的本地变量表、static成员变量、常量引用、本地方法栈的变量。
+
 ## 垃圾回收算法
 
-标记-清除：标记阶段标记要回收的垃圾，清除阶段直接清除垃圾，会产生内存碎片
+### 标记-清除
 
-复制：年轻代回收，把存活的对象移动到另一部分内存中，然后把其他内存全部清空
+标记阶段标记要回收的垃圾，清除阶段直接清除垃圾，会产生内存碎片。
 
-标记-整理 标记阶段标记要回收的垃圾，整理阶段把垃圾向内存的一段移动并清除，不会产生内存碎片
+**缺点：**如果碎片太多，下一次为对象分配内存空间如果没有足够的连续内存就会出发GC。
 
-分代收集算法
+### 复制
+
+年轻代回收，把存活的对象移动到另一部分内存中，然后把已使用的内存空间  全部清空
+
+**缺点：**实现简单，运行高效，空间利用率低，多出一块不用的内存。
+
+### 标记-整理 
+
+标记阶段标记要回收的垃圾，整理阶段把存活的对象向内存的一端移动，然后清理掉垃圾，不会产生内存碎片。
+
+**缺点：**整理阶段比较耗时。
+
+### 分代收集算法
+
 分代收集算法并没有多么高深的原理，只是将前面的算法进行了合理组合与利用。根据对象存活周期的不同将内存划分为几块，一般将Java堆分为新生代和老年代。在新生代中，每次垃圾收集时会有大量的对象死去，只有少量存活，使用复制收集算法；老年代中对象存活率较高，没有额外空间对其进行分配担保，使用标记-清除算法或标记-整理来进行回收。
 
 
 ## JVM垃圾回收
 
-Young区采用复制算法
+- Young区采用复制算法。Young区分为survivor区（S0+S1）和Eden区
 
-Old区采用标记-清除 或者标记-整理
+- Old区采用标记-清除 或者标记-整理。
+
 
 ### 对象分配
 
-对象优先在Eden区分配
+####  Eden区对象
 
-大对象直接进入老年代：-XX:PretenureSizeThreshold
+对象优先在Eden区分配，即创建对象时现在Eden区分配。
 
-长期存活的对象进入老年代：-XX:MaxTenuringThreshold  -XX:+PrintTrnuringDistribution  -XX:TargetSurvivoRatio
+#### 老年代对象
+
+##### -XX:PretenureSizeThreshold
+
+大对象直接进入老年代：JVM参数决定 -XX:PretenureSizeThreshold，如果超过这个参数的大小直接进入old区。
+
+##### -XX:MaxTenuringThreshold
+
+长期存活的对象进入老年代：每经过一次YoungGC依旧存活的对象年龄+1，等年龄达到-XX:MaxTenuringThreshold时进入old区。这个参数的大小默认为15，即15次YoungGC后依然存活进入old区。
+
+##### -XX:TargetSurvivorRatio
+
+当YoungGC后Survico区存活对象的比例达到-XX:TargetSurvivorRatio时，默认50%，YoungGC后当存活的对象超过50%后，计算剩余对象各年龄比例，要和MaxTenuringThreshold的值进行比较，以此保证MaxTenuringThreshold设置太大，导致对象无法晋升。
+
+场景分析：
+
+1. MaxTenuringThreshold为15
+2. 年龄1的对象占用了33%
+3. 年龄2的对象占用33%
+4. 年龄3的对象占用34%。
+5. 通过-XX:TargetSurvivorRatio比率来计算一个期望值，desired_survivor_size 。
+6. 然后用一个total计数器，累加每个年龄段对象大小的总和。
+7. 当total大于desired_survivor_size 停止。
+8. 然后用当前age和MaxTenuringThreshold 对比找出最小值作为结果
+
+总体表征就是，年龄从小到大进行累加，当加入某个年龄段后，累加和超过**survivor**区域-XX:TargetSurvivorRatio的时候，就从这个年龄段网上的年龄的对象进行晋升。
+
+年龄1的占用了33%，年龄2的占用了33%，累加和超过默认的-XX:TargetSurvivorRatio（50%），年龄2和年龄3的对象都会晋升至old区。
+
+##### -XX:+PrintTrnuringDistribution  
+
+发生YoungGC时YoungGC时打印对象的年龄分布情况。 方便查看存活的对象都是多少岁的。
 
 ### 垃圾收集器
+
+#### 停顿时间、吞吐量
+
+**停顿时间：**垃圾收集器在做垃圾回收中断应用执行的时间。-XX:MaxGCPauseMillis
+
+**吞吐量：**花在垃圾收集的时间和花在应用时间的占比。-XX:GCTimeRatio=<n>,垃圾收集时间占：1/1+n
 
 #### 串行收集器 Serial:Serial、Serial Old
 
@@ -246,29 +499,69 @@ Old区采用标记-清除 或者标记-整理
 
 #### 并行收集器 Parallel:Parallel Scavenge、Parallel Old 
 
-概念： 指多条垃圾收集线程并行工作，但此用户线程仍处于等待状态
+吞吐量优先，Server模式下默认的收集器
+
+概念： 指多条垃圾收集线程并行工作，但此用户线程仍处于等待状态，适用于科学计算，后台处理等若交互场景。
 
 开启串行收集器：-XX:+UseParallelGc(作用与新生代)   -XX:+UseParallelOldGc（作用于老年带）
 
 #### 并发收集器Concurrent:CMS、G1
 
-概念：用户线程和垃圾线程同时执行（但不一定时并行的，可能会交替执行）垃圾收集线程在执行的时候不会停顿用户程序的运    行。适合对响应时间有要求的场景，比如Web
+**响应时间优先。**
+
+概念：用户线程和垃圾线程同时执行（但不一定时并行的，可能会交替执行）垃圾收集线程在执行的时候不会停顿用户程序的运行。适合对响应时间有要求的场景，比如Web
 
 ##### CMS垃圾收集器
 
-作用于老年代
+- 作用于老年代
 
-采用标记清除算法
+- 采用标记清除算法
 
-与CMS收集器适配的新生代收集器，如果开启CMS，新生代默认为UseParNewlGc收集器
 
-开启CMS收集器  -XX:+UseConcMarkSweepGc   -XX:+UseParNewlGc
+与CMS收集器适配的新生代收集器，如果开启CMS，新生代默认为UseParNewlGC收集器
+
+开启CMS收集器  -XX:+UseConcMarkSweepGC   -XX:+UseParNewlGC
+
+**收集过程：**
+
+1. CMS initial mark:初始标记GCRoot。Stop the word
+2. CMS concurrent mark：并发标记
+3. CMS concurrent preclean：并发预清理
+4. CMS remark：重新标记，Stop the word
+5. CMS concurrent sweep：并发清除
+6. CMS concurrent reset：并发重置
+
+**调优：**
+
+-XX:ConcGCThreads:并发的线程数，与用户线程一起执行的线程数。
+
+-XX:+UseCMSCompactAtFullCollection：FullGC之后对内存做一次压缩，减少内存碎片。
+
+-XX:+CMSFullGCsBeforeCompaction：多少次FullGC之后压缩一次，因为压缩比较消耗时间
+
+-XX:CMSInitiatingOccupancyFraction：Old区占有对象超过此参数触发FullGC
+
+-XX:+CMSScavengeBeforeRemark：FullGC之前先做YGC，建议打开此参数
 
 ##### G1垃圾收集器
 
-标记整理算法
+作用在新生代老年代，标记整理算法；开启G1收集器  -XX:+UseG1GC
 
-开启G1收集器  -XX:+UseG1Gc
+G1收集器没有FullGC，而是MixedGC，回收所有的Young区和部分Old区
+
+
+
+#### 如何选择垃圾收集器
+
+优先调整堆的大小让服务器自己来选择
+
+如果内存小于100M，使用串行收集器
+
+如果是单核，并且没有停顿时间要求，串行或者JVM自己来选。
+
+如果允许停顿时间超过一秒，选择并行或者JVM自己来选。
+
+如果响应时间最重要
 
  # GC
 
@@ -299,7 +592,7 @@ Old区采用标记-清除 或者标记-整理
 
 
 
- ## 老年代GC（MajorGC/FullGC）
+ ## 老年代GC（MajorGC）
 
 指发生在老年代的 GC，出现了 MajorGC，经常会伴随至少一次的 MinorGC（但非绝对的，在 Parallel Scavenge 收集器的收集策略里就有直接进行 MajorGC 的策略选择过程）。MajorGC 的速度一般会比 MinorGC 慢 10 倍以上。
 

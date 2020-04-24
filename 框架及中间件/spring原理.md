@@ -361,21 +361,25 @@ protected void registerDisposableBeanIfNecessary(String beanName, Object bean, R
 
 # 循环依赖
 
+### 解决办法
+
 A依赖B，B依赖A
 
 只可以解决属性注入循环以来，构造器注入和非单例无法解决。
 
-利用三级缓存
+利用三级缓存解决循环依赖。
+
+当前bean创建标识作用：出现无法解决的循环依赖时，抛出异常，退出递归。
 
 ```
 /** Cache of singleton objects: bean name --> bean instance */
 	private final Map<String, Object> singletonObjects = new ConcurrentHashMap<String, Object>(256);
 
-	/** Cache of singleton factories: bean name --> ObjectFactory */
-	private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<String, ObjectFactory<?>>(16);
-
 	/** Cache of early singleton objects: bean name --> bean instance */
 	private final Map<String, Object> earlySingletonObjects = new HashMap<String, Object>(16);
+	
+		/** Cache of singleton factories: bean name --> ObjectFactory */
+	private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<String, ObjectFactory<?>>(16);
 ```
 
 流程：
@@ -388,15 +392,21 @@ A依赖B，B依赖A
 
 ```
 protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+        //第一步在singletonObjects中获取
 		Object singletonObject = this.singletonObjects.get(beanName);
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			synchronized (this.singletonObjects) {
+			//如果在singletonObjects中没有获取到，则在earlySingletonObjects中获取
 				singletonObject = this.earlySingletonObjects.get(beanName);
 				if (singletonObject == null && allowEarlyReference) {
+				//如果在earlySingletonObjects中获取不到，则在singletonFactories中获取
 					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
 					if (singletonFactory != null) {
+				        获取到单例bean A的半成品
 						singletonObject = singletonFactory.getObject();
+						把A放入到提早曝光的单例bean集合中
 						this.earlySingletonObjects.put(beanName, singletonObject);
+						从第三级缓存中移除
 						this.singletonFactories.remove(beanName);
 					}
 				}
@@ -404,7 +414,35 @@ protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 		}
 ```
 
+### set循环依赖
 
+A-->B;B-->A流程：
+
+- 创建A，getBean（A）--->doGetBean（A）方法。
+- doGetBean（A）：检查是否能在三级缓存找到A，找不到。并且isSingletonCurrentlyInCreation为false；
+- createBean（A）-->doCreateBean（A）。
+- doCreateBean（A）并把A放入当前bean创建标识，一个HashMap，无参构造器创建A成功；放入第三级缓存，属性填充时获取B。
+- 创建B，getBean（B）--->doGetBean（B）方法（递归）。
+- doGetBean（B）：检查是否能在三级缓存找到B，找不到。并且isSingletonCurrentlyInCreation为false；
+- createBean（B）-->doCreateBean（B）。
+- doCreateBean（B）无参构造器创建A成功；放入第三级缓存，属性填充时获取A。
+- doGetBean（A）：检查是否能在三级缓存找到A，虽然isSingletonCurrentlyInCreation为true。结果找到了A的半成品。
+- 返回A的半成品，完成B的创建，接着创建A过程中属性填充B完毕，完成A的创建。
+- 结束，解决循环依赖。
+
+### 构造器循环依赖
+
+A-->B;B-->A流程：
+
+- 创建A，getBean（A）--->doGetBean（A）方法。
+- doGetBean（A）：检查是否能在三级缓存找到A，找不到。isSingletonCurrentlyInCreation为false,创建A；
+- createBean（A）-->doCreateBean（A）。
+- doCreateBean（A）并把A放入当前bean创建标识，一个HashMap。
+- 因为是有参构造器，先创建B
+- 创建B，getBean（B）--->doGetBean（B）方法。
+- doGetBean（B）：检查是否能在三级缓存找到B，找不到。isSingletonCurrentlyInCreation为false,创建B；
+- doCreateBean（B）并把B放入当前bean创建标识集合。
+- 因为是有参构造器，先创建A，doGetBean（A）：检查是否能在三级缓存找到A，找不到。并且isSingletonCurrentlyInCreation为true；抛出循环依赖错误。
 
 # spring中有关接口使用
 

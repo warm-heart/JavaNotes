@@ -34,9 +34,101 @@ List代表是一个元素有序、可重复的集合，集合中每个元素都�
 
 ### ArrayList
 
+#### List转数组
+
+一定要在参数里加上new String[] 不然会报ClassCastException
+
+```
+String res[] = result.toArray(new String[0]);
+```
+
+#### JDK1.8重要特点
+
+如果List list=new ArrayList(); 那么第一次add时扩容后的容量为10；
+
+如果List list=new ArrayList(0);那么第一次扩容后容量为1
+
+**源码分析：**
+
+```
+
+private static final int DEFAULT_CAPACITY = 10;
+
+private static final Object[] EMPTY_ELEMENTDATA = {};
+
+private static final Object[] DEFAULTCAPACITY_EMPTY_ELEMENTDATA = {};
+```
+
+**两个不同的构造方法**
+
+```
+public ArrayList(int initialCapacity) {
+    if (initialCapacity > 0) {
+        this.elementData = new Object[initialCapacity];
+    } else if (initialCapacity == 0) {
+        this.elementData = EMPTY_ELEMENTDATA;
+    } else {
+        throw new IllegalArgumentException("Illegal Capacity: "+
+                                           initialCapacity);
+    }
+}
+
+/**
+ * Constructs an empty list with an initial capacity of ten.
+ */
+public ArrayList() {
+    this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
+}
+```
+
+添加元素相关方法
+
+```
+ public boolean add(E e) {
+ //容量判断调用ensureCapacityInternal方法
+        ensureCapacityInternal(size + 1);  // Increments modCount!! 
+        elementData[size++] = e;
+        return true;
+    }
+  //  ensureCapacityInternal方法
+private void ensureCapacityInternal(int minCapacity) {
+//调用ensureExplicitCapacity方法，其中参数的计算调用calculateCapacity方法
+    ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
+}
+//计算容量
+private static int calculateCapacity(Object[] elementData, int minCapacity) {
+ //如果elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA即创建list时未指定容量；则返回10
+    if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+        return Math.max(DEFAULT_CAPACITY, minCapacity);
+    }
+    //如果指定了容量则返回minCapacity 即add方法中色size+1； 如果创建list时指定容量为0 则返回1
+    return minCapacity;
+}
+
+private void ensureExplicitCapacity(int minCapacity) {
+    modCount++;
+    // overflow-conscious code
+    //判断是否需要扩容
+    if (minCapacity - elementData.length > 0)
+        grow(minCapacity);
+}
+//扩容
+ private void grow(int minCapacity) {
+        // overflow-conscious code
+        int oldCapacity = elementData.length; //如果初始化为0，
+        int newCapacity = oldCapacity + (oldCapacity >> 1); //0  //可以看到扩容为1.5倍，这也是hasnmap不用ArrayList的原因
+        if (newCapacity - minCapacity < 0)
+            newCapacity = minCapacity; //0<1 成立，则扩容为1
+        if (newCapacity - MAX_ARRAY_SIZE > 0)
+            newCapacity = hugeCapacity(minCapacity);
+        // minCapacity is usually close to size, so this is a win:
+        elementData = Arrays.copyOf(elementData, newCapacity);
+    }
+```
+
 在Java2之前引入了向量类Vector，其使用方式与ArrayList类似，但Vector实现了现成同步，以避免多线程访问数据时引起数组损坏
 
-线程不安全：
+#### 线程不安全
 
 两个线程同时添加元素，得到size=1，线程1在下标1处添加元素，线程1挂起，线程2也在下标1处添加并修改size为2，线程1重新运行，size变为3，造成元素丢失。
 
@@ -68,7 +160,7 @@ Queue中有两个具体实现类：链表LinkedList和优先队列PriorityQueue�
 
  此类实现了优先队列，在默认情况下，该队列的初始容量为11。其实例所存储的元素默认以自然顺序排列，因此自然顺序下最小的元素会优先出队。队列中可能出现对个优先级相同的元素，那么拥有相同优先级的元素会有其中任意一个优先出队。在讲述TreeSet时提到过使用Comparator接口来实现比较器顺序，在优先队列中依然可行。
 
-### 方法
+### 队列方法比较
 
 入队
 
@@ -83,7 +175,7 @@ Queue中有两个具体实现类：链表LinkedList和优先队列PriorityQueue�
 
 出队
 
-- poll：出队并删除。
+- poll：出队并删除。如果没有返回null。
 - remove：删除元素，没有元素抛异常。
 - take：阻塞队列特有方法，取走元素，没有元素阻塞。
 
@@ -148,8 +240,48 @@ keySet 其实是遍历了 2 次，一次是转为 Iterator 对象，另一次是
           });
    ```
 
+### HashMap链表转化为红黑树
+
+put方法中的一段代码，当链表长度大于等于8进入转化为红黑树treeifyBin方法
+
+```
+p.next = newNode(hash, key, value, null);
+if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+    treeifyBin(tab, hash);
+break;
+```
+
+treeifyBin方法判断tab.length是否大于MIN_TREEIFY_CAPACITY（转化为红黑树的最小容量 64），如果大于则转换为红黑树，如果小于进行扩容。
+
+```
+final void treeifyBin(Node<K,V>[] tab, int hash) {
+    int n, index; Node<K,V> e;
+    if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY)
+        resize();
+    else if ((e = tab[index = (n - 1) & hash]) != null) {
+        TreeNode<K,V> hd = null, tl = null;
+        do {
+            TreeNode<K,V> p = replacementTreeNode(e, null);
+            if (tl == null)
+                hd = p;
+            else {
+                p.prev = tl;
+                tl.next = p;
+            }
+            tl = p;
+        } while ((e = e.next) != null);
+        if ((tab[index] = hd) != null)
+            hd.treeify(tab);
+    }
+}
+```
 
 ### HashMap源码分析
+
+线程不安全：
+
+- 高并发获取数据为null resize时导致的。
+- 高并发下插入数据丢失
 
 ##### put方法
 
@@ -224,6 +356,11 @@ keySet 其实是遍历了 2 次，一次是转为 Iterator 对象，另一次是
 
 ##### resize方法
 
+**扩容条件：**
+
+- 元素个数大于 tab.length*DEFAULT_LOAD_FACTOR（0.75）
+- 链表长度大于等于8并且 tab.length<MIN_TREEIFY_CAPACITY(64)  解释： 链表长度大于等于8但数组长度小于转化为红黑树最小数组长度阈值64，此时进行扩容而并不进行红黑树的转化。（参考HashMap链表转化为红黑树）
+
 ```
 final Node<K,V>[] resize() {
     Node<K,V>[] oldTab = table;
@@ -256,7 +393,7 @@ final Node<K,V>[] resize() {
     threshold = newThr;
     @SuppressWarnings({"rawtypes","unchecked"})
         Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
-    //高并发下应该此处也应该会导致get为null
+    //高并发下应该此处也应该会导致get为null，即线程不安全
     table = newTab;
     
     //如果原数组不为空
@@ -337,7 +474,7 @@ JDK1.8中高并发存在问题
 
 继承自HashMap 原理与HashMap相似，entry数组加链表，另外内部维护了一个双向链表维护数据的顺序性
 
-注意是before和after表示前一个数据和后一个数据。
+注意是before和after表示前一个数据和后一个数据。如果设置按照了访问顺序，那么每次put和get都会把数据放到链表的头部，通过删除链表尾部的元素可以实现LRU缓存。
 
 **结构图**
 
@@ -392,7 +529,7 @@ Node<K,V> newNode(int hash, K key, V value, Node<K,V> e) {
 
 # ConCurrentHashmap
 
-使用CAS与在操作hash值相同的链表的头结点还是会synchronized上锁，这样才能保证线程安全。
+先CAS与操作尝试插入，如果cas失败则Hash碰撞，则对链表的头结点用synchronized修饰加锁，保证线程安全。
 
 ```
 final V putVal(K key, V value, boolean onlyIfAbsent) {
@@ -425,7 +562,7 @@ final V putVal(K key, V value, boolean onlyIfAbsent) {
                             binCount = 1;
                             /*
                             下面的代码就是先查找链表中是否出现了此key，如果出现，则更新value，并跳出循环，
-                            否则将节点加入到里阿尼报末尾并跳出循环
+                            否则将节点加入到链表末尾并跳出循环
                             */
                             for (Node<K,V> e = f;; ++binCount) {
                                 K ek;

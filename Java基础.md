@@ -1,10 +1,57 @@
-## List转数组
+# 引用类型
 
-一定要在参数里加上new String[] 不然会报ClassCastException
+### 强引用
+
+强引用如果存在，即使OOM，也不会GC
+
+### 软引用
+
+当内存不够时才会被GC
 
 ```
-String res[] = result.toArray(new String[0]);
+  public static void main(String[] args) throws InterruptedException {
+        String  s=new String("12");
+        SoftReference<String> softReference=new SoftReference<>(s);
+        System.out.println(s); //输出12
+        System.out.println(softReference.get());
+        
+        s=null;
+        System.gc();  //s变为null，立即回收stringWeakReference弱引用。
+        Thread.sleep(2000);
+        System.out.println(s);//null
+        System.out.println(softReference.get()); //输出12 内存足够，没有被回收
+    }
+}
 ```
+
+### 弱引用
+
+没有强引用时，下次GC被回收
+
+```
+  public static void main(String[] args) throws InterruptedException {
+        String  s=new String("12");
+        WeakReference<String> stringWeakReference = new WeakReference<>(s);
+        System.out.println(s); //输出12
+        System.out.println(stringWeakReference.get()); //输出12
+   
+        s=null;
+        System.gc(); //s变为null，立即回收stringWeakReference弱引用。
+        Thread.sleep(2000);
+        System.out.println(s);//输出null
+       System.out.println(stringWeakReference.get());//输出null 被GC回收
+       
+    }
+}
+```
+
+
+
+### 虚引用
+
+任何时候都有可能被回收
+
+
 
 # ==和equals
 
@@ -184,6 +231,10 @@ Java中的泛型基本上都是在编译器这个层次来实现的。在生成�
   InnerClass innerClass = new InnerClass();
   inner inner = innerClass.new inner();
   ```
+
+# 序列化
+
+ 
 
 # 克隆
 
