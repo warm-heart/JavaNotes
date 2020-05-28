@@ -590,7 +590,7 @@ public class UserContextHolder {
 - **新建状态**：线程对象被创建后，就进入了新建状态。此时它和其他Java对象一样，仅仅由Java虚拟机分配了内存，并初始化其成员变量值。
 - **就绪状态**：也被称为“可执行状态”。线程对象被调用了该对象的start()方法，该线程处于就绪状态。Java虚拟机会为其创建方法调用栈和程序计数器。处于就绪状态的线程，随时可能被CPU调度执行，取决于JVM中线程调度器的调度。
 - **运行状态**：线程获取CPU权限进行执行。需要注意的是，线程只能从就绪状态进入到运行状态。塞状态是线程因为某种原因放弃CPU使用权，暂时停止运行。直到线程进入就绪状态，才有机会转到运行状态。阻塞的情况分三种：
-- **阻塞状态** ：（ wait（），sleep（）,yield(),join() ），wait() 让当前线程进入阻塞状态，直到唤醒，会释放锁。yield() 和sleep() 不会释放锁。
+- **阻塞状态** ：（ wait()，sleep(),yield(),join() ），wait() 让当前线程进入阻塞状态，直到唤醒，会释放锁。yield() 和sleep() 不会释放锁。
 - **死亡状态**：线程执行完了、因异常退出了run()方法或者直接调用该线程的stop()方法（容易导致死锁，现在已经不推荐使用），该线程结束生命周期。
 
 ### **notify()、nofityAll()方法**  
@@ -613,7 +613,7 @@ public class UserContextHolder {
 可以看出问题的关键在于两个地方，一个是第4步notify并不能保证notify唤醒的线程获得锁，一个是第7步notify可能会唤醒同一种角色的线程。
 可以用Lock/Condition解决，两个Condition可以保证notify（signal）不同角色的线程，也可以用notifyAll解决，使线程间变成对锁的竞争。
 
-### **Synchronized关键字** 
+# Synchronized关键字
 
 在java中，每一个对象有且仅有一个同步锁。这也意味着，同步锁是依赖于对象而存在。当当前线程调用某对象的synchronized方法时，就获取了该对象的同步锁。例如synchronized(obj)，当前线程就获取了“obj这个对象”的同步锁。不同线程对同步锁的访问是互斥的。也就是说，某时间点，对象的同步锁只能被一个线程获取到！通过同步锁，我们就能在多线程中，实现对“对象/方法”的互斥访问。  例如，现在有个线程A和线程B，它们都会访问“对象obj的同步锁”。假设，在某一时刻，线程A获取到“obj的同步锁”并在执行一些操作；而此时，线程B也企图获取“obj的同步锁” ——  线程B会获取失败，它必须等待，直到线程A释放了“该对象的同步锁”之后线程B才能获取到“obj的同步锁”从而才可以运行。
 
@@ -734,7 +734,11 @@ class SafeDateForamt {
 
  【强制】线程池不允许使用 Executors 去创建，而是通过 ThreadPoolExecutor 的方式，这样 的处理方式让写的同学更加明确线程池的运行规则，规避资源耗尽的风险。 
 
-说明：Executors 返回的线程池对象的弊端如下： 1）FixedThreadPool 和 SingleThreadPool:   允许的请求队列长度为 Integer.MAX_VALUE，可能会堆积大量的请求，从而导致 OOM。 2）CachedThreadPool 和 ScheduledThreadPool:   允许的创建线程数量为 Integer.MAX_VALUE，可能会创建大量的线程，从而导致 OOM。 
+说明：Executors 返回的线程池对象的弊端如下： 
+
+1）FixedThreadPool 和 SingleThreadPool:   允许的请求队列长度为 Integer.MAX_VALUE，可能会堆积大量的请求，从而导致 OOM。
+
+ 2）CachedThreadPool 和 ScheduledThreadPool:   允许的创建线程数量为 Integer.MAX_VALUE，可能会创建大量的线程，从而导致 OOM。 
 
 当一个线程处于睡眠，阻塞状态时，被别的线程打断 就是抛出java.lang.InterruptedException: sleep interrupted异常
 

@@ -2,7 +2,7 @@
 
 ## 自我保护机制
 
-Eureka Server以一种谦虚的态度来判断是不是自己出了问题，也就是当大量的服务续约超时时，就认为是自己出现问题了。（如果少量服务续约超时，则认为是服务故障），在实际中有可能出现网络闪断情况，Eureka Server通过判断是否有大量续约失败，来确定是否开启自我保护，判断上一分钟的续约数是否小于自我保护阀值，如果上一分钟的续约数）小于自我保护阀值，则开启自我保护机制，不再进行服务的剔除，一旦开启了保护机制，则服务注册中心维护的服务实例就不是那么准确了，此时我们可以使用`eureka.server.enable-self-preservation=false`来关闭保护机制，这样可以确保注册中心中不可用的实例被及时的剔除（**不推荐**）。
+Eureka Server以一种谦虚的态度来判断是不是自己出了问题，也就是当大量的服务续约超时时，就认为是自己出现问题了。（如果少量服务续约超时，则认为是服务故障），在实际中有可能出现网络闪断情况，Eureka Server通过判断是否有大量续约失败，来确定是否开启自我保护，判断上一分钟的续约数是否小于自我保护阀值，如果上一分钟的续约数小于自我保护阀值，则开启自我保护机制，不再进行服务的剔除，一旦开启了保护机制，则服务注册中心维护的服务实例就不是那么准确了，此时可以使用`eureka.server.enable-self-preservation=false`来关闭保护机制，这样可以确保注册中心中不可用的实例被及时的剔除（**不推荐**）。
 
 ## 服务提供者
 
@@ -12,7 +12,7 @@ Eureka Server以一种谦虚的态度来判断是不是自己出了问题，也�
 
 ### 服务续约（Renew）
 
-注册完服务之后，服务提供者会维持一个心跳告诉Eureka Server ：“我是一个活着的健康实例”，从而防止Eureka Server的“剔除任务”从服务列表中排除该实例。 eureka.instance.lease-renewal-interval-in-seconds：心跳任务的调用时间，默认三十秒 eureka.instance.lease-expiration-duration-seconds：服务时效时间，默认九十秒
+注册完服务之后，服务提供者会维持一个心跳告诉Eureka Server ：“我是一个活着的健康实例”，从而防止Eureka Server的“剔除任务”从服务列表中排除该实例。 eureka.instance.lease-renewal-interval-in-seconds：心跳任务的调用时间，默认三十秒， eureka.instance.lease-expiration-duration-seconds：服务时效时间，默认九十秒，超过时间剔除服务。
 
 ## 服务消费者
 
@@ -339,9 +339,11 @@ eureka.server.use-read-only-response-cache=true
 
 ```
 
+### 
+
 # Ribbon
 
-ribbon在服务调用过程中起到负载均衡作用
+ribbon在服务调用过程中起到负载均衡作用。
 
 ### 全局配置
 
@@ -389,7 +391,159 @@ com.netflix.loadbalancer.BestAvailableRule：选择并发较小的实例；
 com.netflix.loadbalancer.AvailabilityFilteringRule：先过滤掉故障实例，再选择并发较小的实例；
 com.netflix.loadbalancer.ZoneAwareLoadBalancer：采用双重过滤，同时过滤不是同一区域的实例和故障实例，选择并发较小的实例。
 
+### Ribbon负载均衡源码
 
+ILoadBalancer接口中定义了关于获取服务（Iping）以及选择服务（Irule）的方法，
+
+```
+public interface ILoadBalancer {
+   //添加一个服务
+   public void addServers(List<Server> newServers);
+   //负载均衡选择一个服务，调用Irule
+   public Server chooseServer(Object key);
+   
+  //服务下线，如果经过Iping服务的isAlive状态为false，那么服务的状态再次设置为false并通知            notifyServerStatusChangeListener监听器，netfli未实现监听器，如果有需要可以自己实现。
+   public void markServerDown(Server server);
+   //获取所有的服务，已经过期，使用getReachableServers，相当于availableOnly为true
+   public List<Server> getServerList(boolean availableOnly);
+
+    public List<Server> getReachableServers();
+    //获取所有的服务  
+   public List<Server> getAllServers();
+```
+
+默认实现ILoadBalancer接口的是BaseLoadBalancer。
+
+```
+   public class BaseLoadBalancer extends AbstractLoadBalancer implements
+        PrimeConnections.PrimeConnectionListener, IClientConfigAware {
+        
+   //变量
+   private static Logger logger = LoggerFactory
+            .getLogger(BaseLoadBalancer.class);
+    //默认的负载均衡策略       
+    private final static IRule DEFAULT_RULE = new RoundRobinRule();
+    private final static SerialPingStrategy DEFAULT_PING_STRATEGY = new SerialPingStrategy();
+    private static final String DEFAULT_NAME = "default";
+    private static final String PREFIX = "LoadBalancer_";
+
+    protected IRule rule = DEFAULT_RULE;
+
+    protected IPingStrategy pingStrategy = DEFAULT_PING_STRATEGY;
+
+    protected IPing ping = null;
+
+    @Monitor(name = PREFIX + "AllServerList", type = DataSourceType.INFORMATIONAL)
+    protected volatile List<Server> allServerList = Collections
+            .synchronizedList(new ArrayList<Server>());
+    @Monitor(name = PREFIX + "UpServerList", type = DataSourceType.INFORMATIONAL)
+    protected volatile List<Server> upServerList = Collections
+            .synchronizedList(new ArrayList<Server>());
+
+    protected ReadWriteLock allServerLock = new ReentrantReadWriteLock();
+    protected ReadWriteLock upServerLock = new ReentrantReadWriteLock();
+
+    protected String name = DEFAULT_NAME;
+
+    protected Timer lbTimer = null;
+    protected int pingIntervalSeconds = 10;
+    protected int maxTotalPingTimeSeconds = 5;
+    protected Comparator<Server> serverComparator = new ServerComparator();
+
+    protected AtomicBoolean pingInProgress = new AtomicBoolean(false);
+
+    protected LoadBalancerStats lbStats;
+
+    private volatile Counter counter = Monitors.newCounter("LoadBalancer_ChooseServer");
+
+    private PrimeConnections primeConnections;
+
+    private volatile boolean enablePrimingConnections = false;
+    
+    private IClientConfig config;
+    
+    private List<ServerListChangeListener> changeListeners = new CopyOnWriteArrayList<ServerListChangeListener>();
+
+    private List<ServerStatusChangeListener> serverStatusListeners = new CopyOnWriteArrayList<ServerStatusChangeListener>();
+    //默认的构造方法
+public BaseLoadBalancer() {
+    this.name = DEFAULT_NAME;
+    this.ping = null;
+    //设置默认的负载均衡策略
+    setRule(DEFAULT_RULE);
+    //定时执行Iping确认服务是否存活，一直跟下去会看到调用Iping的isAlive方法
+    setupPingTask();
+    lbStats = new LoadBalancerStats(DEFAULT_NAME);
+}
+```
+
+修改ribbon的负载均衡策略一般可以用来做灰度发布，把新功能的地址记录到一个serverList,redis记录用户ip，下次早进来判断是否已经访问过新功能，如果是直接在serverList里调一个地址访问。
+
+####  RandomRule
+
+```
+public Server choose(ILoadBalancer lb, Object key) {
+        if (lb == null) {
+            return null;
+        }
+        Server server = null;
+
+        while (server == null) {
+            if (Thread.interrupted()) {
+                return null;
+            }
+            在线集合，全部都存活的Server
+            List<Server> upList = lb.getReachableServers();
+            所有集合，有可能包含未上线或者已下线
+            List<Server> allList = lb.getAllServers();
+
+            int serverCount = allList.size();
+            if (serverCount == 0) {
+                /*
+                 * No servers. End regardless of pass, because subsequent passes
+                 * only get more restrictive.
+                 */
+                return null;
+            }
+
+            int index = chooseRandomInt(serverCount);
+            server = upList.get(index);
+
+            if (server == null) {
+                /*
+                 * The only time this should happen is if the server list were
+                 * somehow trimmed. This is a transient condition. Retry after
+                 * yielding.
+                 */
+                Thread.yield();
+                continue;
+            }
+
+            if (server.isAlive()) {
+                return (server);
+            }
+
+            // Shouldn't actually happen.. but must be transient or a bug.
+            server = null;
+            Thread.yield();
+        }
+
+        return server;
+
+    }
+```
+
+### IPing
+
+探测服务是否存活
+
+NIWSDiscoveryPing：不执行ping操作，根据EurekaClient的反馈
+
+PingUrl：使用HttpClient对服务进行Ping操作
+
+DummyPing：默认返回true
+
+NoOpPing：永远返回true
 
 # Feign
 
@@ -420,7 +574,7 @@ feign.compression.request.min-request-size=2048
 Feign中Hystrix的配置和Ribbon有点像，基础配置如下：
 
 ```
-# 设置熔断超时时间
+#设置熔断超时时间，要大于ribbon的（ReadTimeout+ConnectTimeout）* 重试次数，不然ribbon还在重试，hystrix已经降级
 hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds=10000
 
 # 关闭Hystrix功能（不要和上面的配置一起使用）
@@ -444,6 +598,12 @@ hystrix.command.hello.execution.timeout.enabled=false
 ```
 
 但是我们的接口名可能会重复，这个时候同名的接口会共用这一条Hystrix配置。
+
+线程隔离
+
+请求缓存
+
+请求合并
 
 # gateway
 

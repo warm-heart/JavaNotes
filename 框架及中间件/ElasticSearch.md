@@ -215,7 +215,7 @@ System.out.println("update: " + JSON.toJSONString(updateResponse));
 
 **termQuery和matchQuery区别：**
 
-term不会分词，march会根据提供的分词器进行分词
+term不会分词，match会根据提供的分词器进行分词
 
 **AND与OR：**
 
