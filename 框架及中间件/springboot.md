@@ -50,3 +50,13 @@ public class IOCConfid {
 The following candidates were found but could not be injected:
 	- Bean method 'role' in 'IOCConfid' not loaded because @ConditionalOnClass did not find required class 'com.book.config.condition'
 ```
+
+# 源码分析
+
+## bean的扫描顺序
+
+1. 先扫描用户工程下的所有配置类，递归解析
+2. 扫描import下的配置类，递归解析
+3. invokeBeanFactoryPostProcessor中扫描所有的beanPostProcessor处理器
+4. onfersh方法启动tomcat容器并实例化所有bean
+5. getBean时调用处理器的方法对Bean进行特殊处理（AOP）

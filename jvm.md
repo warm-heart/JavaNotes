@@ -106,7 +106,7 @@ Java语言本身是安全的语言，它做了很多的安全校验，比如类�
 
 ##### 流程
 
-这个阶段主要是对**类变量初始化**。换句话说，只对static修饰的变量或语句进行初始化。
+这个阶段主要是对**类变量初始化**。换句话说，只对static修饰的变量或语句进行初始化。（不会执行代码块。代码块只有new执行）
 
 如果初始化一个类的时候，其父类尚未初始化，则优先初始化其父类。
 
@@ -463,7 +463,7 @@ jstack 72（pid）
 5. 通过-XX:TargetSurvivorRatio比率来计算一个期望值，desired_survivor_size 。
 6. 然后用一个total计数器，累加每个年龄段对象大小的总和。
 7. 当total大于desired_survivor_size 停止。
-8. 然后用当前age和MaxTenuringThreshold 对比找出最小值作为结果
+8. 然后用当前age和MaxTenuringThreshold 对比找出最小值作为结果 
 
 总体表征就是，年龄从小到大进行累加，当加入某个年龄段后，累加和超过**survivor**区域-XX:TargetSurvivorRatio的时候，就从这个年龄段往上的年龄的对象进行晋升。
 
