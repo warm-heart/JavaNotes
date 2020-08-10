@@ -2,7 +2,7 @@
 
 AQS即是AbstractQueuedSynchronizer，一个用来构建锁和同步工具的框架，包括常用的ReentrantLock、CountDownLatch、Semaphore等。
 
-AQS没有锁之类的概念，它有个state变量，是个int类型，在不同场合有着不同含义。本文研究的是锁，为了好理解，姑且先把state当成锁。
+AQS没有锁之类的概念，它有个state变量，是个int类型，在不同场合有着不同含义。为了好理解，先把state当成锁。
 
 AQS围绕state提供两种基本操作“获取”和“释放”，有条双向队列存放阻塞的等待线程，并提供一系列判断和处理方法，简单说几点：
 
@@ -207,7 +207,7 @@ final boolean acquireQueued(final Node node, int arg) {
 }
 ```
 
-**标记1**是线程唤醒后尝试获取锁的过程。如果前一个节点正好是head，表示自己排在第一位，可以马上调用tryAcquire尝试。如果获取成功就简单了，直接修改自己为head。这步是实现公平锁的核心，保证释放锁时，由下个排队线程获取锁。（看到线程解锁时，再看回这里啦）
+**标记1**是线程唤醒后尝试获取锁的过程。如果前一个节点正好是head，表示自己排在第一位，可以马上调用tryAcquire尝试。如果获取成功就简单了，直接修改自己为head。这步是实现公平锁的核心，保证释放锁时，由下个排队线程获取锁。（看到线程解锁时，再看回这里）
 
 **标记2**是线程获取锁失败的处理。这个时候，线程可能等着下一次获取，也可能不想要了，Node变量waitState描述了线程的等待状态，一共四种情况：
 
@@ -250,9 +250,9 @@ private final boolean parkAndCheckInterrupt() {
 }
 ```
 
-parkAndCheckInterrupt使用了LockSupport，和cas一样，最终使用UNSAFE调用Native方法实现线程阻塞（以后有机会就分析下LockSupport的原理，park和unpark方法作用类似于wait和notify）。最后返回线程唤醒后的中断状态，关于中断，后文会分析。
+parkAndCheckInterrupt使用了LockSupport，和cas一样，最终使用UNSAFE调用Native方法实现线程阻塞（park和unpark方法作用类似于wait和notify）。最后返回线程唤醒后的中断状态。
 
-到这里总结一下获取锁的过程：线程去竞争一个锁，可能成功也可能失败。成功就直接持有资源，不需要进入队列；失败的话进入队列阻塞，等待唤醒后再尝试竞争锁。
+总结一下获取锁的过程：线程去竞争一个锁，可能成功也可能失败。成功就直接持有资源，不需要进入队列；失败的话进入队列阻塞，等待唤醒后再尝试竞争锁。
 
 ### 释放锁
 

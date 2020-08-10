@@ -142,8 +142,6 @@ private void ensureExplicitCapacity(int minCapacity) {
 线程A开始进行设置值操作， elementData[size++] = e 操作。此时size变为10。
 线程B也开始进行设置值操作，它尝试设置elementData[10] = e，而elementData没有进行过扩容，它的下标最大为9。于是此时会报出一个数组越界的异常ArrayIndexOutOfBoundsException.
 
-LinkedList
-
 
 
 # Queue
