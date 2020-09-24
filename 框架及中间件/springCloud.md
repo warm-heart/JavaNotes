@@ -609,3 +609,6 @@ hystrix.command.hello.execution.timeout.enabled=false
 
 
 
+DynamicServerListLoadBalancer 的updateListOfServers方法进入 会看到从注册中心拉取服务 获取服务 然后设置到 BaseLoadBalancer的serverList中
+
+
