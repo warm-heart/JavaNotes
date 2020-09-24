@@ -607,7 +607,90 @@ hystrix.command.hello.execution.timeout.enabled=false
 
 # gateway
 
+进入ZoneAwareLoadBalancer的构造方法
+	@Bean
+	@ConditionalOnMissingBean
+	public ILoadBalancer ribbonLoadBalancer(IClientConfig config,
+			ServerList<Server> serverList, ServerListFilter<Server> serverListFilter,
+			IRule rule, IPing ping, ServerListUpdater serverListUpdater) {
+		if (this.propertiesFactory.isSet(ILoadBalancer.class, name)) {
+			return this.propertiesFactory.get(ILoadBalancer.class, config, name);
+		}
+ //进入父类DynamicServerListLoadBalancer构造方法
+		return new ZoneAwareLoadBalancer<>(config, rule, ping, serverList,
+				serverListFilter, serverListUpdater);
+	}
 
+
+ public DynamicServerListLoadBalancer(IClientConfig clientConfig, IRule rule, IPing ping,
+                                         ServerList<T> serverList, ServerListFilter<T> filter,
+                                         ServerListUpdater serverListUpdater) {
+        super(clientConfig, rule, ping);
+        this.serverListImpl = serverList;
+        this.filter = filter;
+        this.serverListUpdater = serverListUpdater;
+        if (filter instanceof AbstractServerListFilter) {
+            ((AbstractServerListFilter) filter).setLoadBalancerStats(getLoadBalancerStats());
+        }
+ //初始化服务列表
+        restOfInit(clientConfig);
+    }
+ 
+    void restOfInit(IClientConfig clientConfig) {
+        boolean primeConnection = this.isEnablePrimingConnections();
+        // turn this off to avoid duplicated asynchronous priming done in BaseLoadBalancer.setServerList()
+        this.setEnablePrimingConnections(false);
+        enableAndInitLearnNewServersFeature();
+//更新服务列表
+        updateListOfServers();
+        if (primeConnection && this.getPrimeConnections() != null) {
+            this.getPrimeConnections()
+                    .primeConnections(getReachableServers());
+        }
+        this.setEnablePrimingConnections(primeConnection);
+        LOGGER.info("DynamicServerListLoadBalancer for client {} initialized: {}", clientConfig.getClientName(), this.toString());
+    }
+    
+    
+    @VisibleForTesting
+    public void updateListOfServers() {
+        List<T> servers = new ArrayList<T>();
+        if (serverListImpl != null) {
+        //获取服务列表
+            servers = serverListImpl.getUpdatedListOfServers();
+            LOGGER.debug("List of Servers for {} obtained from Discovery client: {}",
+                    getIdentifier(), servers);
+
+            if (filter != null) {
+                servers = filter.getFilteredListOfServers(servers);
+                LOGGER.debug("Filtered List of Servers for {} obtained from Discovery client: {}",
+                        getIdentifier(), servers);
+            }
+        }
+        updateAllServerList(servers);
+    }
+    DiscoveryEnabledNIWSServerList的方法
+      @Override
+    public List<DiscoveryEnabledServer> getUpdatedListOfServers(){
+        return obtainServersViaDiscovery();
+    }
+    
+     private List<DiscoveryEnabledServer> obtainServersViaDiscovery() {
+        List<DiscoveryEnabledServer> serverList = new ArrayList<DiscoveryEnabledServer>();
+
+        if (eurekaClientProvider == null || eurekaClientProvider.get() == null) {
+            logger.warn("EurekaClient has not been initialized yet, returning an empty list");
+            return new ArrayList<DiscoveryEnabledServer>();
+        }
+
+        EurekaClient eurekaClient = eurekaClientProvider.get();
+        if (vipAddresses!=null){
+            for (String vipAddress : vipAddresses.split(",")) {
+                // if targetRegion is null, it will be interpreted as the same region of client
+                从注册中心获取服务
+                List<InstanceInfo> listOfInstanceInfo = eurekaClient.getInstancesByVipAddress(vipAddress, isSecure, targetRegion);
+                for (InstanceInfo ii : listOfInstanceInfo) {
+                    if (ii.getStatus().equals(InstanceStatus.UP)) {
 
 DynamicServerListLoadBalancer 的updateListOfServers方法进入 会看到从注册中心拉取服务 获取服务 然后设置到 BaseLoadBalancer的serverList中
 
