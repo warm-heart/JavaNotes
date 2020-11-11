@@ -575,3 +575,10 @@ SpringIoc中SpringFactoryBean真正的bean
 hello spring
 ```
 
+
+
+# SpringAop
+
+获取beanfactory中的所有aspect并放到缓存中，双重检查所机制防止重复解析（防止浪费性能），aspect的每个方法封装成Advisor（Advisor 里面有个属性是Advice），最后JDK代理和CGLIB代理会遍历Advisor解析成对应的MethodInterceptor。 
+
+创建bean的时候会遍历bean中的方法对所有的Advisor进行匹配如果匹配到则创建代理对象（JDK和Cglib）并把匹配到的Advisor放入代理类中，运行代理类的某个方法时对代理类中的Advisor进行匹配（匹配与方法对应的）如果匹配到则转化为MethodInterceptor
