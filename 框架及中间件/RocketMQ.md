@@ -80,3 +80,25 @@ topic的队列分布在多台broker上，如果此台broker上 testTopic只有qu
 # MappedFile
 
 逻辑结构
+
+# 什么时候清理物理消息文件？
+那消息文件到底删不删，什么时候删？
+
+消息存储在CommitLog之后，的确是会被清理的，但是这个清理只会在以下任一条件成立才会批量删除消息文件（CommitLog）：
+
+消息文件过期（默认72小时），且到达清理时点（默认是凌晨4点），删除过期文件。
+消息文件过期（默认72小时），且磁盘空间达到了水位线（默认75%），删除过期文件。
+磁盘已经达到必须释放的上限（85%水位线）的时候，则开始批量清理文件（无论是否过期），直到空间充足。
+注：若磁盘空间达到危险水位线（默认90%），出于保护自身的目的，broker会拒绝写入服务。
+DefaultMessageStore类的deleteExpiredFiles方法
+   private void deleteExpiredFiles() {
+            int deleteCount = 0;
+            long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
+            int deletePhysicFilesInterval = DefaultMessageStore.this.getMessageStoreConfig().getDeleteCommitLogFilesInterval();
+            int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
+
+            boolean timeup = this.isTimeToDelete();
+            boolean spacefull = this.isSpaceToDelete();
+            boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
+
+            if (timeup || spacefull || manualDelete) {
