@@ -92,20 +92,37 @@ ES默认在创建索引的时候，会创建5个分片，会为每个分片创�
 该scroll参数（传递到search请求和每个scroll 请求）告诉Elasticsearch应该保持多长时间的搜索上下文活着。
  它的值（例如1m，参见“ 时间单位”）不需要足够长的时间来处理所有数据，而只需要足够长的时间来处理前一批结果即可。
  每个scroll请求（带有scroll参数）都设置一个新的到期时间。如果scroll没有在scroll 参数中传递请求，
- 那么搜索上下文将作为该 scroll 请求的一部分被释放。
+ 那么搜索上下文将作为该 scroll 请求的一部分被释放。scroll超过超时时间后，搜索上下文将自动删除。但是，保持滚动打开是有代价的（花费内存），
+ 因此，一旦不再使用clear-scrollAPI 使用滚动，则应明确清除滚动 
 
-scroll超过超时时间后，搜索上下文将自动删除。但是，如上一节所述，保持滚动打开是有代价的，
- 因此，一旦不再使用clear-scrollAPI 使用滚动，则应明确清除滚动 ：
+**缺点：scroll 会产生快照可能导致oom 并且不是实时的**
 
 ### search After
 
 search After 为什么不用产生临时快照之类的存储信息，就能保证滚动顺序读取数据呢？
 每个文档具有一个唯一值的字段应该用作排序规范的仲裁器。否则，具有相同排序值的文档的排序顺序将是未定义的。建议的方法是使用字段_id，它肯定包含每个文档的一个唯一值。
-scorll 会产生快照可能导致oom 并且不是实时的
 
 # 聚合
 
-es不能对text字段进行聚合
+聚合相当于关系数据库中的group By
+
+es不能对text字段进行聚合（原因是text字段不会生成DocValues）
+
+# docValue
+
+**docValue是正排索引结构，本质的目的是为了通过docid快速拿到所需要的字段值。**
+
+1. 所有支持`doc_values`参数的字段都默认启用了。如果你确定不需要在一个字段上排序、聚合或通过脚本字段访问到该字段的值，你可以禁用`doc_values`，以节省磁盘空间，mapping设置："doc_values": false 禁用docValue，
+
+2. DocValues其实是Lucene在构建索引时，会额外建立一个有序的基于document => field value的映射列表；
+
+3. docValue是一种记录doc字段值的一种形式，在例如在结果排序和聚合查询时，需要**通过docid取字段值**的场景下是非常高效的。
+
+4. 基于Lucene的es都是使用经典的倒排索引模式来达到快速检索的目的，简单的说就是建立 搜索词>>>>> 文档id列表 这样的关系映射，
+   然后在搜索时，通过类似hash算法，来快速定位到一个搜索关键词，然后读取其的文档id集合，这就是倒排索引的核心思想，这样搜索数据
+   是非常高效快速的，当然它也是有缺陷的，假如我们需要对数据做一些聚合操作，比**如排序，聚合时，如果没有正排索引时，Lucene内部会遍历倒排索引提取所有需要排序字段或者聚合字段然后再次构建一个最终的排好序的文档集合list**，这个步骤的过程全部维持在内存中操作，而且如果数据量巨大的话，非常容易就造成内存溢出和性能缓慢。
+
+**如果有了正排索引，通过筛选过后拿到的docid去正排索引（DocValues）拿到所需字段的值进行聚合、排序性能是非常高的。**
 
 # 写入原理
 
@@ -113,7 +130,7 @@ es不能对text字段进行聚合
 
 数据写入到内存buffer； 
 同时写入到数据到translog buffer； 
-每隔1s数据从buffer中refresh到FileSystemCache中，生成segment文件，一旦生成segment文件，就能通过索引查询到了； 
+每隔1s数据从buffer中refresh到FileSystemCache（OS cache）中，生成segment文件，一旦生成segment文件，就能通过索引查询到了； 
 refresh完，memory buffer就清空了； 
 每隔5s中，translog 从buffer flush到磁盘中； 
 定期/定量从FileSystemCache中,结合translog内容 flush index到磁盘中。做增量flush的；
@@ -126,7 +143,7 @@ refresh完，memory buffer就清空了；
    解释：translog的作用：在执行commit之前，所有的而数据都是停留在buffer或OS cache之中，无论buffer或OS cache都是内存，一旦这台机器死了，内存的数据就会丢失，所以需要将数据对应的操作写入一个专门的日志问价之中，一旦机器出现宕机，再次重启的时候，es会主动的读取translog之中的日志文件的数据，恢复到内存buffer和OS cache之中。
 6. 将现有的translog文件进行清空，然后在重新启动一个translog，此时commit就算是成功了，默认的是每隔30分钟进行一次commit，但是如果translog的文件过大，也会触发commit，整个commit过程就叫做一个flush操作，我们也可以通过ES API,手动执行flush操作，手动将OS cache 的数据fsync到磁盘上面去，记录一个commit point，清空translog文件
    补充：其实translog的数据也是先写入到OS cache之中的，默认每隔5秒之中将数据刷新到硬盘中去，也就是说，可能有5秒的数据仅仅停留在buffer或者translog文件的OS cache中，如果此时机器挂了，会丢失5秒的数据，但是这样的性能比较好，我们也可以将每次的操作都必须是直接fsync到磁盘，但是性能会比较差。
-7. 如果时删除操作，commit的时候会产生一个.del文件，里面讲某个doc标记为delete状态，那么搜索的时候，会根据.del文件的状态，就知道那个文件被删除了。
+7. 如果是删除操作，commit的时候会产生一个.del文件，里面讲某个doc标记为delete状态，那么搜索的时候，会根据.del文件的状态，就知道那个文件被删除了。
 8. 如果时更新操作，就是讲原来的doc标识为delete状态，然后重新写入一条数据即可。
 9. buffer每次更新一次，就会产生一个segment file 文件，所以在默认情况之下，就会产生很多的segment file 文件，将会定期执行merge操作
 10. 每次merge的时候，就会将多个segment file 文件进行合并为一个，同时将标记为delete的文件进行删除，然后将新的segment file 文件写入到磁盘，这里会写一个commit point，标识所有的新的segment file，然后打开新的segment file供搜索使用。
