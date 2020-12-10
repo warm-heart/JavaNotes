@@ -124,6 +124,41 @@ es不能对text字段进行聚合（原因是text字段不会生成DocValues）
 
 **如果有了正排索引，通过筛选过后拿到的docid去正排索引（DocValues）拿到所需字段的值进行聚合、排序性能是非常高的。**
 
+# ES时间问题
+
+## UTC协调世界
+
+UTC协调世界时即格林威治平太阳时间，是指格林威治所在地的标准时间，也是表示地球自转速率的一种形式，UTC基于国际原子时间。
+
+```
+ //比如北京时间2020-01-01 08：00：00
+ 
+ 以0时区转结果为 utc时间 2020-01-01 08：00：00毫秒数
+ public final static Long toEpochMilliFor0(LocalDateTime localDateTime) {
+        Long second = localDateTime.toInstant(ZoneOffset.of("+0")).toEpochMilli();
+        return second;
+    }
+    
+     以东八区转结果为 utc时间 2020-01-01 00：00：00 毫秒数
+    public final static Long toEpochMilli(LocalDateTime localDateTime) {
+        Long second = localDateTime.toInstant(ZoneOffset.of("+8")).toEpochMilli();
+        return second;
+    }
+```
+
+
+
+## 解决方案
+
+ES中最终会把时间转化为utc时间戳，也就是0时区时间（utc），我们再Java api查询的时候最好使用不带时区的时间（LocalDateTime）或者把时间转化为utc时间戳去查询（**不要转化为东八区时间戳**）
+
+```
+ //转化为0时区的时间戳
+ Long second = localDateTime.toInstant(ZoneOffset.of("+0")).toEpochMilli();
+```
+
+
+
 # 写入原理
 
 ![5490117-da320c66996dd424](C:\Users\wql\Desktop\5490117-da320c66996dd424.png)
