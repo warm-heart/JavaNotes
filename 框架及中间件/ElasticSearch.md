@@ -195,6 +195,115 @@ refresh完，memory buffer就清空了；
    1. 查询过程得到的排序结果，标记处哪些文档是符合要求的，此时仍然需要获取这些文档返回给客户端
    2. 协调节点会确定实际需要的返回的文档，并向含有该文档的分片发送get请求，分片获取的文档返回给协调节点，协调节点将结果返回给客户端。
 
+# ES优化
+
+## 断路器
+
+```
+# 缓存回收大小，无默认值
+# 有了这个设置，最久未使用（LRU）的 fielddata 会被回收为新数据腾出空间
+# 控制fielddata允许内存大小，达到HEAP 20% 自动清理旧cache 
+# 如果这个参数小于fielddata断路器参数，则永远不会触发fielddata断路器
+indices.fielddata.cache.size: 20%
+
+
+indices.breaker.total.use_real_memory: false
+# 总断路器 揉合 request 和 fielddata 断路器保证两者组合起来不会使用超过堆内存的 70%(默认值)。
+#如果indices.breaker.total.use_real_memory为 false，则默认为JVM堆的70％ false。如果indices.breaker.total.use_real_memory 为true，则默认为JVM堆的95％。
+indices.breaker.total.limit: 85%
+
+
+# fielddata断路器估算将fielddata数据加载到fielddata高速缓存所需的堆内存。如果加载该字段将导致缓存超过预定义的内存限制，则断路器将停止操作并返回错误。
+
+#fielddata数据断路器的限制。默认为JVM堆的40％。
+indices.breaker.fielddata.limit: 40%
+#与所有字段数据估计值相乘以确定最终估计值的常数。默认为1.03。
+indices.breaker.fielddata.overhead: 1.03
+
+
+# request 断路器估算需要完成其他请求部分的结构大小，例如，用于在请求期间计算聚合的内存，默认为JVM堆的60％。
+indices.breaker.request.limit: 40%
+ #一个常数，所有请求估计值都将与该常数相乘以确定最终估计值。默认为1
+indices.breaker.request.overhead: 1
+
+#请求缓存设置 设置为JVM堆的2%，默认1%
+indices.requests.cache.size: 2%
+```
+
+## JVM
+
+堆内存不小于2G，不大于32G（大于32G会关闭指针压缩。 每个对象的指针都变长了，就会使用更多的 CPU 内存带宽，也就是说你实际上失去了更多的内存。）
+
+- 设置`Xmx`和`Xms`不超过物理内存50％。Elasticsearch除了JVM堆以外的目的而需要内存，因此为此留出空间很重要。例如，Elasticsearch使用堆外缓冲区来进行有效的网络通信，依靠操作系统的文件系统缓存来有效地访问文件，并且JVM本身也需要一些内存。观察Elasticsearch过程使用的内存多于该`Xmx`设置配置的限制，这是正常的。
+
+## 分片请求缓存
+
+当针对一个索引或多个索引运行搜索请求时，每个涉及的分片都将在本地执行搜索，并将其本地结果返回给*协调节点*，该节点将这些分片级结果合并为一个全局结果集。
+
+分片级请求缓存模块在每个分片上缓存本地结果。这允许频繁使用（并且可能复杂）的搜索请求几乎立即返回结果。请求高速缓存非常适合日志记录用例，在这种情况下，只有最新索引才被主动更新-旧索引的结果将直接从高速缓存中提供。
+
+### 缓存设置
+
+缓存是在节点级别管理的，并且具有`1%` 堆的默认最大大小。可以在`config/elasticsearch.yml`文件中进行更改，此外，也可以使用该`indices.requests.cache.expire`设置为缓存的结果指定TTL，但是没有理由这样做。因为刷新索引后，旧的结果将自动失效。
+
+### 缓存失效机制
+
+缓存是智能的-保证未缓存搜索与缓存搜索有着几乎相同的结果；
+
+每当**分片刷新**时，高速缓存的结果都会自动失效，但**前提是分片中的数据实际上已更改**。换句话说，始终会从缓存中获得与未缓存的搜索请求相同的结果。
+
+缓存可以使用restfulAPI设置失效
+
+```
+POST  localhost:9200/my-index-000001/_cache/clear?request=true
+```
+
+### 开启和禁用缓存
+
+缓存默认情况下处于启用状态，但是在创建新索引时可以将其禁用，如下所示：
+
+```
+PUT /my-index-000001
+{
+  "settings": {
+    "index.requests.cache.enable": false
+  }
+}
+```
+
+也可以使用修改索引设置API在现有索引上动态启用或禁用它 ：
+
+```
+PUT /my-index-000001/_settings
+{ "index.requests.cache.enable": true }
+```
+
+### 在每个请求上启用和禁用缓存
+
+```
+GET /my-index-000001/_search?request_cache=true
+{
+  "size": 0,
+  "aggs": {
+    "popular_colors": {
+      "terms": {
+        "field": "colors"
+      }
+    }
+  }
+}
+```
+
+### 查看缓存使用大小
+
+缓存的大小（以字节为单位）和逐出的数量可以使用api查看
+
+```
+GET /_stats/request_cache?human
+```
+
+
+
 # Spring Boot整合ElasticSearch
 
 #### 加入依赖
