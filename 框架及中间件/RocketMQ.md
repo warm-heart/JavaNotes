@@ -63,42 +63,153 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 ##  标签（Tag）
 
 为消息设置的标志，用于同一主题下区分不同类型的消息。来自同一业务单元的消息，可以根据不同业务目的在同一主题下设置不同标签。标签能够有效地保持代码的清晰度和连贯性，并优化RocketMQ提供的查询系统。消费者可以根据Tag实现对不同子主题的不同消费逻辑，实现更好的扩展性。
-# commitLog
+# 消息存储
 
-存储消息 顺序写 随机读,broker上的topic共用
+## commitLog
 
-# consumeQueue
+存储消息 顺序写 随机读,broker上的所有topic共用，也就是说，一台broker上的所有消息都会顺序写再commitlog上一个commitlog文件大小为1G
 
-存储消息在commitLog文件的偏移量
+## consumeQueue
 
-topic的队列分布在多台broker上，如果此台broker上 testTopic只有queue1 那么consumeQueue只存储testTopic下的queue1的消息偏移量（一个queue不会分布在多台broker上）
+存储消息在commitLog文件的偏移量，以便再coomitlog快速取出数据。一个topic的队列分布在多台broker上，如果此台broker上 testTopic只有queue1 那么consumeQueue只存储testTopic下的queue1的消息偏移量（一个queue不会分布在多台broker上）
 
-# MappedFileQueue
+### consumerOffset
+
+存储消息消费偏移量，存储了Topic下每个队列消息消费的偏移量，  **集群模式**此文件存储在broker端，**广播模式**下存储在消费端；文件内容如下
+
+```
+{
+	"offsetTable":{
+		"%RETRY%EsPosBillItemConsumer@EsPosBillItemConsumer":{0:154
+		},
+		"datacenter-pos@EsPosBillItemConsumer":{0:616598,1:616598,2:616596,3:616597 
+		},
+		"datacenter-pos@EsPosBillConsumer":{0:616598,1:616598,2:616596,3:616597
+		},
+		"%RETRY%EsPosBillConsumer@EsPosBillConsumer":{0:0
+		}
+	}
+}
+```
+
+
+
+## MappedFileQueue
 
 逻辑结构
 
-# MappedFile
+## MappedFile
 
 逻辑结构
 
-# 什么时候清理物理消息文件？
+## 什么时候清理物理消息文件？
 那消息文件到底删不删，什么时候删？
 
 消息存储在CommitLog之后，的确是会被清理的，但是这个清理只会在以下任一条件成立才会批量删除消息文件（CommitLog）：
 
-消息文件过期（默认72小时），且到达清理时点（默认是凌晨4点），删除过期文件。
-消息文件过期（默认72小时），且磁盘空间达到了水位线（默认75%），删除过期文件。
-磁盘已经达到必须释放的上限（85%水位线）的时候，则开始批量清理文件（无论是否过期），直到空间充足。
-注：若磁盘空间达到危险水位线（默认90%），出于保护自身的目的，broker会拒绝写入服务。
-DefaultMessageStore类的deleteExpiredFiles方法
-   private void deleteExpiredFiles() {
-            int deleteCount = 0;
-            long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
-            int deletePhysicFilesInterval = DefaultMessageStore.this.getMessageStoreConfig().getDeleteCommitLogFilesInterval();
-            int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
+消息文件过期（默认48小时），且到达清理时点（默认是凌晨4点），删除过期文件。
+消息文件过期（默认48小时），且磁盘空间达到了水位线（默认75%），删除过期文件。
+若磁盘已经达到必须释放的上限（85%水位线）的时候，则立即开始批量清理文件（无论是否过期），直到空间充足。但不会拒绝新消息写入
+若磁盘空间达到危险水位线（默认90%），出于保护自身的目的，broker会拒绝写入服务并立即清理过期文件
+源码：DefaultMessageStore类的deleteExpiredFiles方法
 
-            boolean timeup = this.isTimeToDelete();
-            boolean spacefull = this.isSpaceToDelete();
-            boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
+            private void deleteExpiredFiles() {
+                int deleteCount = 0;
+                long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
+                int deletePhysicFilesInterval = DefaultMessageStore.this.getMessageStoreConfig().getDeleteCommitLogFilesInterval();
+                int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
+    
+                boolean timeup = this.isTimeToDelete();
+                boolean spacefull = this.isSpaceToDelete();
+                boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
+    
+                if (timeup || spacefull || manualDelete) {
+    
+                    if (manualDelete)
+                        this.manualDeleteFileSeveralTimes--;
+    
+                    boolean cleanAtOnce = DefaultMessageStore.this.getMessageStoreConfig().isCleanFileForciblyEnable() && this.cleanImmediately;
+    
+                    log.info("begin to delete before {} hours file. timeup: {} spacefull: {} manualDeleteFileSeveralTimes: {} cleanAtOnce: {}",
+                        fileReservedTime,
+                        timeup,
+                        spacefull,
+                        manualDeleteFileSeveralTimes,
+                        cleanAtOnce);
+    
+                    fileReservedTime *= 60 * 60 * 1000;
+    
+                    deleteCount = DefaultMessageStore.this.commitLog.deleteExpiredFile(fileReservedTime, deletePhysicFilesInterval,
+                        destroyMapedFileIntervalForcibly, cleanAtOnce);
+                    if (deleteCount > 0) {
+                    } else if (spacefull) {
+                        log.warn("disk space will be full soon, but delete file failed.");
+                    }
+                }
+            }
 
-            if (timeup || spacefull || manualDelete) {
+isSpaceToDetele
+
+```
+private boolean isSpaceToDelete() {
+            double ratio = DefaultMessageStore.this.getMessageStoreConfig().getDiskMaxUsedSpaceRatio() / 100.0;
+
+            cleanImmediately = false;
+
+            {
+                String storePathPhysic = DefaultMessageStore.this.getMessageStoreConfig().getStorePathCommitLog();
+                double physicRatio = UtilAll.getDiskPartitionSpaceUsedPercent(storePathPhysic);
+                if (physicRatio > diskSpaceWarningLevelRatio) {
+                    boolean diskok = DefaultMessageStore.this.runningFlags.getAndMakeDiskFull();
+                    if (diskok) {
+                        DefaultMessageStore.log.error("physic disk maybe full soon " + physicRatio + ", so mark disk full");
+                    }
+             若磁盘空间达到危险水位线（默认90%），出于保护自身的目的，broker会拒绝写入服务并立即清理过期文件
+                    cleanImmediately = true;
+                } else if (physicRatio > diskSpaceCleanForciblyRatio) {
+                若磁盘已经达到必须释放的上限（85%水位线）的时候，则立即开始批量清理文件（无论是否过期），直到空间充足。但不会拒绝新消息写入
+                    cleanImmediately = true;
+                } else {
+                    boolean diskok = DefaultMessageStore.this.runningFlags.getAndMakeDiskOK();
+                    if (!diskok) {
+                        DefaultMessageStore.log.info("physic disk space OK " + physicRatio + ", so mark disk ok");
+                    }
+                }
+
+                if (physicRatio < 0 || physicRatio > ratio) {
+                //磁盘空间达到了水位线（默认75%），删除过期文件。
+                    DefaultMessageStore.log.info("physic disk maybe full soon, so reclaim space, " + physicRatio);
+                    return true;
+                }
+            }
+
+            {
+                String storePathLogics = StorePathConfigHelper
+                    .getStorePathConsumeQueue(DefaultMessageStore.this.getMessageStoreConfig().getStorePathRootDir());
+                double logicsRatio = UtilAll.getDiskPartitionSpaceUsedPercent(storePathLogics);
+                if (logicsRatio > diskSpaceWarningLevelRatio) {
+                    boolean diskok = DefaultMessageStore.this.runningFlags.getAndMakeDiskFull();
+                    if (diskok) {
+                        DefaultMessageStore.log.error("logics disk maybe full soon " + logicsRatio + ", so mark disk full");
+                    }
+
+                    cleanImmediately = true;
+                } else if (logicsRatio > diskSpaceCleanForciblyRatio) {
+                    cleanImmediately = true;
+                } else {
+                    boolean diskok = DefaultMessageStore.this.runningFlags.getAndMakeDiskOK();
+                    if (!diskok) {
+                        DefaultMessageStore.log.info("logics disk space OK " + logicsRatio + ", so mark disk ok");
+                    }
+                }
+
+                if (logicsRatio < 0 || logicsRatio > ratio) {
+                    DefaultMessageStore.log.info("logics disk maybe full soon, so reclaim space, " + logicsRatio);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+```
+

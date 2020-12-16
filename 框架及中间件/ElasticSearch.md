@@ -43,6 +43,10 @@ ES默认在创建索引的时候，会创建5个分片，会为每个分片创�
   ```
   {
     "settings": {
+    //刷新到osCache时间，也就是可以被搜索到
+      "refresh_interval": "5",
+      "index.routing.allocation.require.temperature": "hot",
+      "number_of_shards": 1,
       "number_of_replicas": 0
     },
     "mappings": {
@@ -165,7 +169,7 @@ ES中最终会把时间转化为utc时间戳，也就是0时区时间（utc）�
 
 数据写入到内存buffer； 
 同时写入到数据到translog buffer； 
-每隔1s数据从buffer中refresh到FileSystemCache（OS cache）中，生成segment文件，一旦生成segment文件，就能通过索引查询到了； 
+每隔1s（refresh_interval）数据从buffer中refresh到FileSystemCache（OS cache）中，生成segment文件，一旦生成segment文件，就能通过索引查询到了； 
 refresh完，memory buffer就清空了； 
 每隔5s中，translog 从buffer flush到磁盘中； 
 定期/定量从FileSystemCache中,结合translog内容 flush index到磁盘中。做增量flush的；
@@ -182,6 +186,18 @@ refresh完，memory buffer就清空了；
 8. 如果时更新操作，就是讲原来的doc标识为delete状态，然后重新写入一条数据即可。
 9. buffer每次更新一次，就会产生一个segment file 文件，所以在默认情况之下，就会产生很多的segment file 文件，将会定期执行merge操作
 10. 每次merge的时候，就会将多个segment file 文件进行合并为一个，同时将标记为delete的文件进行删除，然后将新的segment file 文件写入到磁盘，这里会写一个commit point，标识所有的新的segment file，然后打开新的segment file供搜索使用。
+
+# refresh_interval
+
+当数据添加到索引后并不能马上被查询到，等到索引刷新后才会被查询到。 refresh_interval 也就是写入JVM buffer中，再刷新到osCache中的时间间隔，
+
+## `-1` 的使用
+
+当 refresh_interval 为 -1 时，意味着不刷新索引。当需要大量导入数据到ES中，可以将 refresh_interval 设置为 -1 以加快导入速度。导入结束后，再将 refresh_interval 设置为一个正数，例如`1s`。或者手动 refresh 索引。
+
+假如refresh_interval设置为-1，是不是永远不会刷新导数据一直在内存里，内存不就炸了？
+
+1. 在一个index请求，处理完成之后会根据缓存区大小判断是否需要进行refresh操作。如果满了就会进行refresh操作，所以不会操作内存溢出
 
 # 读取原理
 
@@ -301,6 +317,20 @@ GET /my-index-000001/_search?request_cache=true
 ```
 GET /_stats/request_cache?human
 ```
+
+# forceMerge
+
+使用强制合并API可以在一个或多个索引的分片上强制进行合并，合并通过将每个分片中的某些片段合并在一起来减少其数量，还可以释放已删除文档所占用的空间。合并通常自动发生，但有时手动触发合并很有用。
+
+大量删除操作后，es会记录删除数据，反而会增加磁盘空间，这时进行forceMerge操作，会物理删除已经删除的数据。
+
+**注意：**强制合并会导致产生非常大的段（segments ）（> 5GB），并且，如果您继续写入这样的索引，则自动合并策略将永远不会考虑这些段用于将来的合并，直到它们主要由已删除的文档组成。这会导致很大的段保留在索引中，从而导致磁盘使用率增加和搜索性能下降。所以慎用。
+
+##  强制合并期间发生阻塞
+
+调用forceMerge，直到合并完成。如果客户端连接在完成前丢失，则强制合并过程将在后台继续。强制合并相同索引的任何新请求也将阻止，直到正在进行的强制合并完成为止。也就是强制合并期间不能进行搜索。
+
+# ES冷热分离
 
 
 
