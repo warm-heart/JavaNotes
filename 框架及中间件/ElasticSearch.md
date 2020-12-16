@@ -345,7 +345,26 @@ GET /_stats/request_cache?human
 
 # ES冷热分离
 
+elasticSearch.yml配置冷热节点
 
+```
+# 冷热分离 热节点
+node.attr.temperature: hot
+```
+
+```
+"settings": {
+  "refresh_interval": "5s",
+  //设置为热节点
+  "index.routing.allocation.require.temperature": "hot",
+  "number_of_shards": 1,
+  "number_of_replicas": 0
+},
+```
+
+如果索引时间久了新建索引（可以以时间戳为后缀），把旧索引设置为冷数据（更改index.routing.allocation.require.temperature的值）；
+
+搜索时用es的indexPatterns 比如有 hot、hot20201010、20210101三个索引，则搜索时用hot*（索引匹配）
 
 # Spring Boot整合ElasticSearch
 
