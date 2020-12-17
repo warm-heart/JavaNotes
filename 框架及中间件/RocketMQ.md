@@ -42,7 +42,16 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 
 **注意点**
 
-- 如果两个消费有不同的 Consumer  Group名称 并且订阅了同一个topic，则这两个consume都会收到消息（即使是集群模式）
+- 如果两个消费订阅了同一个topic**但是有不同的 Consumer  Group名称**，则这两个消费者组都会收到消息（即使是集群模式），因为broker记录了两个消费者组的消费偏移量
+
+```
+"PubSubscribeTopic@PubSubscribeConsume":{0:0,1:3,2:1,3:0 
+},
+
+"PubSubscribeTopic@PubSubscribeConsume1":{0:0,1:3,2:1,3:0
+},
+```
+
 - 如果两个消费者Consumer  Group名称一样，那么两个消费者只会有一个收到消息（集群模式下）
 
 ##  集群消费（Clustering）
