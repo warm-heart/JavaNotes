@@ -40,6 +40,11 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 
 同一类Consumer的集合，这类Consumer通常消费同一类消息且消费逻辑一致。消费者组使得在消息消费方面，实现负载均衡和容错的目标变得非常容易。要注意的是，消费者组的消费者实例必须订阅完全相同的Topic。RocketMQ 支持两种消息模式：集群消费（Clustering）和广播消费（Broadcasting）。
 
+**注意点**
+
+- 如果两个消费有不同的 Consumer  Group名称 并且订阅了同一个topic，则这两个consume都会收到消息（即使是集群模式）
+- 如果两个消费者Consumer  Group名称一样，那么两个消费者只会有一个收到消息（集群模式下）
+
 ##  集群消费（Clustering）
 
 集群消费模式下,相同Consumer Group的每个Consumer实例平均分摊消息。
