@@ -485,7 +485,7 @@ public class BeanTest implements InitializingBean, BeanFactoryAware {
 
 
 
-#### InitializingBean接口 
+### InitializingBean接口 
 
 InitializingBean接口只有一个afterPropertiesSet（）方法，表示在Bean初始化，完成属性注入之后调用，在用户配置的init-method方法之前被调用。
 
@@ -497,7 +497,7 @@ public interface InitializingBean {
 }
 ```
 
-#### BeanFactoryAware接口
+### BeanFactoryAware接口
 
 实现 BeanFactoryAware 接口的 bean 可以直接访问 Spring 容器，被容器创建以后，它会拥有一个指向 Spring 容器的引用。BeanFactoryAware 接口只有一个方法void setBeanFactory(BeanFactorybeanFactory)。
 
@@ -510,7 +510,7 @@ public interface BeanFactoryAware extends org.springframework.beans.factory.Awar
 }
 ```
 
-#### FactoryBean接口
+### FactoryBean接口
 
 **BeanFacotry是spring中比较原始的Factory。如XMLBeanFactory就是一种典型的BeanFactory。原始的BeanFactory无法支持spring的许多插件，如AOP功能、Web应用等。** 
 **ApplicationContext接口,它由BeanFactory接口派生而来，ApplicationContext包含BeanFactory的所有功能，通常建议比BeanFactory优先**
@@ -575,6 +575,24 @@ SpringIoc中SpringFactoryBean真正的bean
 hello spring
 ```
 
+### ImportBeanDefinitionRegistrar
+
+扫描com.zhangchu.analysis.dto包下带有index注解的类注入到spring容器中
+
+```
+@Component
+public class MyBeanDefinitionRegistry implements ImportBeanDefinitionRegistrar {
+
+
+    @Override
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+        ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(registry, false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Index.class));
+        int count = scanner.scan("com.zhangchu.analysis.dto");
+    }
+}
+```
+
 
 
 # SpringAop
@@ -582,3 +600,147 @@ hello spring
 获取beanfactory中的所有aspect并放到缓存中，双重检查所机制防止重复解析（防止浪费性能），aspect的每个方法封装成Advisor（Advisor 里面有个属性是Advice），最后JDK代理和CGLIB代理会遍历Advisor解析成对应的MethodInterceptor。 
 
 创建bean的时候会遍历bean中的方法对所有的Advisor进行匹配如果匹配到则创建代理对象（JDK和Cglib）并把匹配到的Advisor放入代理类中，运行代理类的某个方法时对代理类中的Advisor进行匹配（匹配与方法对应的）如果匹配到则转化为MethodInterceptor
+
+# SpringBoot原理
+
+## starter原理
+
+springboot启动时会扫描依赖的jar包 resource/META-INF下的spring.factories文件，寻找相应的类,根据配置类扫描类并注册到IOC容器中。
+
+```
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  com.study.service.HelloServiceAutoConfiguration
+```
+
+HelloServiceAutoConfiguration类
+
+```
+@Configuration
+@ComponentScan({"com.study.service"})
+//仅当当前目录下有com.study.service.helloService时才创建
+@ConditionalOnClass(name = {"com.study.service.helloService"})
+public class HelloServiceAutoConfiguration {
+}
+```
+
+## 条件注解
+
+通常与starter配合使用，仅当满足一些特定条件，才可以完成bean的创建。
+
+- @ConditionalOnBean
+- @ConditionalOnMissingBean
+- @ConditionalOnClass
+- @ConditionalOnMissingClass
+- @ConditionalOnProperty
+- @ConditionalOnExpression
+
+@ConditionalOnClass注解 ：仅当当前目录下有指定的类才会创建Bean，其他注解原理类似
+
+```
+@Configuration
+@ConditionalOnClass(name = {"com.book.config.condition"})
+public class IOCConfid {
+    @Bean
+    public Role role() {
+        Role role = new Role();
+        role.setRoleName("cdkfdsd");
+        return role;
+    }
+}
+```
+
+如果当前class路径没有com.book.config.condition类则会报错
+
+```
+The following candidates were found but could not be injected:
+	- Bean method 'role' in 'IOCConfid' not loaded because @ConditionalOnClass did not find required class 'com.book.config.condition'
+```
+
+## 源码分析
+
+```
+public void refresh() throws BeansException, IllegalStateException {
+   synchronized (this.startupShutdownMonitor) {
+      // Prepare this context for refreshing.
+      prepareRefresh();
+
+      // Tell the subclass to refresh the internal bean factory.
+      ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
+
+      // Prepare the bean factory for use in this context.
+      prepareBeanFactory(beanFactory);
+
+      try {
+         // Allows post-processing of the bean factory in context subclasses.
+         postProcessBeanFactory(beanFactory);
+
+         // Invoke factory processors registered as beans in the context.
+         //执行BeanFactoryPostProcessors
+         invokeBeanFactoryPostProcessors(beanFactory);
+
+         // Register bean processors that intercept bean creation.
+         registerBeanPostProcessors(beanFactory);
+
+         // Initialize message source for this context.
+         initMessageSource();
+
+         // Initialize event multicaster for this context.
+         initApplicationEventMulticaster();
+
+         // Initialize other special beans in specific context subclasses.
+         onRefresh();
+
+         // Check for listener beans and register them.
+         registerListeners();
+
+         // Instantiate all remaining (non-lazy-init) singletons.
+         finishBeanFactoryInitialization(beanFactory);
+
+         // Last step: publish corresponding event.
+         finishRefresh();
+      }
+
+      catch (BeansException ex) {
+         if (logger.isWarnEnabled()) {
+            logger.warn("Exception encountered during context initialization - " +
+                  "cancelling refresh attempt: " + ex);
+         }
+
+         // Destroy already created singletons to avoid dangling resources.
+         destroyBeans();
+
+         // Reset 'active' flag.
+         cancelRefresh(ex);
+
+         // Propagate exception to caller.
+         throw ex;
+      }
+
+      finally {
+         // Reset common introspection caches in Spring's core, since we
+         // might not ever need metadata for singleton beans anymore...
+         resetCommonCaches();
+      }
+   }
+}
+```
+
+### invokeBeanFactoryPostProcessors
+
+执行BeanFactoryPostProcessor的postProcessBeanFactory方法 ，
+
+1.先执行是事先加入的BeanFactoryPostProcessor，其中就有ConfigurationClassPostProcessor负责解析项目的启动类，进行bean的扫描，当扫描到自定义的BeanFactoryPostProcessor时然后在执行postProcessBeanFactory的postProcessBeanFactory方法。（BeanFactoryPostProcessor是分批执行的，不是一次执行的，因为由事先手动加入spring容器的先执行，在执行扫描出的自定的BeanFactoryPostProcessor）；
+
+### onRefresh
+
+applicationContext提供给子类扩展的。
+
+实例化所有的bean。并启动servlet容器。
+
+## bean的扫描顺序
+
+1. 先扫描用户工程下的所有配置类，递归解析
+2. 扫描import下的配置类，递归解析
+3. invokeBeanFactoryPostProcessor中扫描所有的beanPostProcessor处理器
+4. onfersh方法启动tomcat容器并实例化所有bean
+5. getBean时调用处理器的方法对Bean进行特殊处理（AOP）
