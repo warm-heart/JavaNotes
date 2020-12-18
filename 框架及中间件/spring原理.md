@@ -586,11 +586,38 @@ public class MyBeanDefinitionRegistry implements ImportBeanDefinitionRegistrar {
 
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
-        ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(registry, false);
+        MyClassPathBeanDefinitionScanner scanner = new MyClassPathBeanDefinitionScanner(registry, false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(Index.class));
-        int count = scanner.scan("com.zhangchu.analysis.dto");
+        Set<BeanDefinitionHolder> beanDefinitionHolders = scanner.doScan("com.zhangchu.analysis.dto");
+        for (BeanDefinitionHolder beanDefinitionHolder : beanDefinitionHolders) {
+            BeanDefinition beanDefinition = beanDefinitionHolder.getBeanDefinition();
+            String className = beanDefinition.getBeanClassName();
+        }
     }
 }
+```
+
+自定义扫描器
+
+```
+public class MyClassPathBeanDefinitionScanner extends ClassPathBeanDefinitionScanner {
+    public MyClassPathBeanDefinitionScanner(BeanDefinitionRegistry registry,boolean useDefaultFilters) {
+        super(registry,useDefaultFilters);
+    }
+
+    @Override
+    protected Set<BeanDefinitionHolder> doScan(String... basePackages) {
+        return super.doScan(basePackages);
+    }
+}
+```
+
+Import导入
+
+```
+@Configuration
+@Import(MyBeanDefinitionRegistry.class)
+public class EsAutoConfig implements ApplicationContextAware {
 ```
 
 
