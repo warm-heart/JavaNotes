@@ -227,3 +227,33 @@ private boolean isSpaceToDelete() {
         }
 ```
 
+# 消息丢失、重复投递，重复消费
+
+再rocketmq中有三种情况消息丢失，分别是生产者向broker发送消息，第二种是broker存储消息，第三种是消费者消费消息。
+
+## 生产段发送消息到broker
+
+- 生产段发送消息，可能再produce--------》borker过程网络闪断导致**消息丢失**，解决：采用rocketmq sendResult并且消息重试机制，可以根据produce sendResult 状态进行处理
+- broker-------》produce 回复网络闪断，消息已经到达了broker，但是produce没有收到sendResult ，则会进行消息重试导致**消息重复投递**（此过程不会导致消息丢失）
+
+## broker存储消息
+
+broker收到produce的消息是先放在内存中，如果是同步刷盘，则不会出现消息丢失，因为消息到达broker就会进行持久化，如果是异步刷盘则会导致**消息丢失**
+
+## 消费者消费消息
+
+消费者消费消息后会给broker一个ack。如果ack在网络闪断形况下丢失。
+
+consume-------------》broker  网络闪断丢失ack，则broker不会修改consumeOffset的消费消息偏移量，则会造成**消息重复消费**
+
+## 消息丢失解决方案
+
+produce使用sendResult 并且开始消息重试，如果单机模式broker开始同步刷盘，集群模式为了保证吞吐量可以采用异步刷盘，同步复制
+
+## 消息重复投递解决方案
+
+保证消息可靠传递就不能保证消息重复投递
+
+## 消息重复消费解决方案
+
+消费端幂等性校验
