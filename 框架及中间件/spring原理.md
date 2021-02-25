@@ -620,7 +620,44 @@ Import导入
 public class EsAutoConfig implements ApplicationContextAware {
 ```
 
+### SmartInitializingSingleton接口
 
+当所有单例bean初始化完成之后，调用SmartInitializingSingleton方法
+
+```
+public class RocketMqConfig implements ApplicationContextAware, SmartInitializingSingleton {
+
+    private ApplicationContext applicationContext;
+
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
+    }
+    /**
+     * 去除jackson消息转换（jackson导致转entity失败）
+     *
+     * @throws BeansException
+     */
+    @Override
+    public void afterSingletonsInstantiated() {
+        Map<String, RocketMQTemplate> map = applicationContext.getBeansOfType(RocketMQTemplate.class);
+        for (Map.Entry entry : map.entrySet()) {
+            CompositeMessageConverter converter = (CompositeMessageConverter) ((RocketMQTemplate) entry.getValue()).getMessageConverter();
+            List<MessageConverter> messageConverters = converter.getConverters();
+            Iterator<MessageConverter> iterator = messageConverters.iterator();
+            while (iterator.hasNext()) {
+                MessageConverter messageConverter = iterator.next();
+                if (messageConverter instanceof MappingJackson2MessageConverter) {
+                    iterator.remove();
+                    break;
+                }
+            }
+        }
+
+    }
+}
+```
 
 # SpringAop
 

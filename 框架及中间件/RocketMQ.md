@@ -229,11 +229,11 @@ private boolean isSpaceToDelete() {
 
 # 消息丢失、重复投递，重复消费
 
-再rocketmq中有三种情况消息丢失，分别是生产者向broker发送消息，第二种是broker存储消息，第三种是消费者消费消息。
+在rocketmq中有三种情况消息丢失，分别是生产者向broker发送消息，第二种是broker存储消息，第三种是消费者消费消息。
 
-## 生产段发送消息到broker
+## 生产端发送消息到broker
 
-- 生产段发送消息，可能再produce--------》borker过程网络闪断导致**消息丢失**，解决：采用rocketmq sendResult并且消息重试机制，可以根据produce sendResult 状态进行处理
+- 生产端发送消息，可能在produce--------》borker过程网络闪断导致**消息丢失**，解决：采用rocketmq sendResult并且消息重试机制，可以根据produce sendResult 状态进行处理
 - broker-------》produce 回复网络闪断，消息已经到达了broker，但是produce没有收到sendResult ，则会进行消息重试导致**消息重复投递**（此过程不会导致消息丢失）
 
 ## broker存储消息
