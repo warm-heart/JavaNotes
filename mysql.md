@@ -367,6 +367,16 @@ undo log属于逻辑日志，它记录的是sql执行相关的信息。当发生
 恢复出来的库的状态不一致。
 ```
 
+如何判断binlog和redolog是否达成了一致#
+
+这个知识点可是纯干货！
+
+当MySQL写完redolog并将它标记为prepare状态时，并且会在redolog中记录一个XID，它全局唯一的标识着这个事务。而当你设置`sync_binlog=1`时，做完了上面第一阶段写redolog后，mysql就会对应binlog并且会直接将其刷新到磁盘中。
+
+下图就是磁盘上的row格式的binlog记录。binlog结束的位置上也有一个XID。
+
+只要这个XID和redolog中记录的XID是一致的，MySQL就会认为binlog和redolog逻辑上一致。就上面的场景来说就会commit，而如果仅仅是rodolog中记录了XID，binlog中没有，MySQL就会RollBack
+
 ![微信图片_20210226133306](C:\Users\wql\Desktop\微信图片_20210226133306.jpg)
 
 # 原子性
