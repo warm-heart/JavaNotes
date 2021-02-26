@@ -377,6 +377,11 @@ undo log属于逻辑日志，它记录的是sql执行相关的信息。当发生
 
 只要这个XID和redolog中记录的XID是一致的，MySQL就会认为binlog和redolog逻辑上一致。就上面的场景来说就会commit，而如果仅仅是rodolog中记录了XID，binlog中没有，MySQL就会RollBack
 
+说到恢复，简单聊下MySQL的复制恢复的步骤。
+
+对于活跃的事务，直接回滚
+对于redo中是Prepare状态的事务，如果binlog中已记录完成则提交，否则回滚事务
+
 ![微信图片_20210226133306](C:\Users\wql\Desktop\微信图片_20210226133306.jpg)
 
 # 原子性
