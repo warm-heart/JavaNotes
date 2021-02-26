@@ -81,11 +81,62 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 
 ## commitLog
 
-存储消息 顺序写 随机读,broker上的所有topic共用，也就是说，一台broker上的所有消息都会顺序写再commitlog上一个commitlog文件大小为1G
+存储消息 顺序写 随机读,broker上的所有topic共用，也就是说，一台broker上的所有消息都会顺序写再commitlog上，一个commitlog文件大小为1G
+
+```
+public class CommitLog {
+  
+    protected final MappedFileQueue mappedFileQueue;
+    
+    protected final DefaultMessageStore defaultMessageStore;
+    
+    private final FlushCommitLogService flushCommitLogService;
+    }
+```
+
+![74433151c88f33be9220ff5ba9d5e8f](C:\Users\wql\Desktop\74433151c88f33be9220ff5ba9d5e8f.png)
+
+## MappedFileQueue
+
+```
+public class MappedFileQueue {
+ 
+
+    private final String storePath;
+
+    private final int mappedFileSize;
+
+    private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
+    }
+```
+
+## MappedFile
+
+```
+public class MappedFile extends ReferenceResource {
+    public static final int OS_PAGE_SIZE = 1024 * 4;
+  
+
+    private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
+    protected final AtomicInteger wrotePosition = new AtomicInteger(0);
+    protected final AtomicInteger committedPosition = new AtomicInteger(0);
+    private final AtomicInteger flushedPosition = new AtomicInteger(0);
+    protected int fileSize;
+    protected FileChannel fileChannel;
+   
+    protected ByteBuffer writeBuffer = null;
+    protected TransientStorePool transientStorePool = null;
+    private String fileName;
+    private long fileFromOffset;
+    private File file;
+    private MappedByteBuffer mappedByteBuffer;
+    private volatile long storeTimestamp = 0;
+    private boolean firstCreateInQueue = false;
+```
 
 ## consumeQueue
 
-存储消息在commitLog文件的偏移量，以便再coomitlog快速取出数据。一个topic的队列分布在多台broker上，如果此台broker上 testTopic只有queue1 那么consumeQueue只存储testTopic下的queue1的消息偏移量（一个queue不会分布在多台broker上）
+存储消息在commitLog文件的偏移量，以便在comitlog快速取出数据。一个topic的队列分布在多台broker上，如果此台broker上 testTopic只有queue1 ，那么consumeQueue只存储testTopic下的queue1的消息偏移量（一个queue不会分布在多台broker上）
 
 ### consumerOffset
 
@@ -107,14 +158,6 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 ```
 
 
-
-## MappedFileQueue
-
-逻辑结构
-
-## MappedFile
-
-逻辑结构
 
 ## 什么时候清理物理消息文件？
 那消息文件到底删不删，什么时候删？
