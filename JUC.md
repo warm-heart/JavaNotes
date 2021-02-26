@@ -41,6 +41,12 @@ static final class Node {
 
 
 
+# sychronized
+
+同步方法，JVM使用**ACC_SYNCHRONIZED**标识来实现。即JVM通过在方法访问标识符(flags)中加入**ACC_SYNCHRONIZED**来实现同步功能。
+
+同步代码块，JVM使用**monitorenter**和**monitorexit**两个指令实现同步。即JVM为代码块的前后真正生成了两个字节码指令来实现同步功能的。
+
 # ReentrantLock
 
 ReentrantLock的锁对象为ReentrantLock自身，不同的ReentrantLock对象为不同的锁，synchronized锁对象为类或类对象
