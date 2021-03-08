@@ -335,6 +335,10 @@ undo log属于逻辑日志，它记录的是sql执行相关的信息。当发生
 
 ### 两阶段提交
 
+写redo log（prepare状态）----->写binlog------------->redo log（commit 状态）
+
+MySQLredolog会在redolog中记录一个XID，它全局唯一的标识着这个事务。而当你设置`sync_binlog=1`时，做完了上面第一阶段写redolog后，mysql就会对应binlog并且会直接将其刷新到磁盘中。
+
 两阶段提交的意义
 
 ```
@@ -367,22 +371,13 @@ undo log属于逻辑日志，它记录的是sql执行相关的信息。当发生
 恢复出来的库的状态不一致。
 ```
 
-如何判断binlog和redolog是否达成了一致#
+#### 如何判断binlog和redolog是否达成了一致
 
-这个知识点可是纯干货！
+对于commit状态的redo log 直接提交事务，
 
-当MySQL写完redolog并将它标记为prepare状态时，并且会在redolog中记录一个XID，它全局唯一的标识着这个事务。而当你设置`sync_binlog=1`时，做完了上面第一阶段写redolog后，mysql就会对应binlog并且会直接将其刷新到磁盘中。
+对于prepare状态的redo log 会检查bin log中有没有对应的XID，如果有 提交事务，如果没有 回滚事务。
 
-下图就是磁盘上的row格式的binlog记录。binlog结束的位置上也有一个XID。
 
-只要这个XID和redolog中记录的XID是一致的，MySQL就会认为binlog和redolog逻辑上一致。就上面的场景来说就会commit，而如果仅仅是rodolog中记录了XID，binlog中没有，MySQL就会RollBack
-
-说到恢复，简单聊下MySQL的复制恢复的步骤。
-
-对于活跃的事务，直接回滚
-对于redo中是Prepare状态的事务，如果binlog中已记录完成则提交，否则回滚事务
-
-![微信图片_20210226133306](C:\Users\wql\Desktop\微信图片_20210226133306.jpg)
 
 # 原子性
 
