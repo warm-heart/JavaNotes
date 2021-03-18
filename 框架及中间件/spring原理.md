@@ -575,6 +575,59 @@ SpringIoc中SpringFactoryBean真正的bean
 hello spring
 ```
 
+#### 源码分析
+
+```
+	try {
+						Object scopedInstance = scope.get(beanName, () -> {
+							beforePrototypeCreation(beanName);
+							try {
+								return createBean(beanName, mbd, args);
+							}
+							finally {
+								afterPrototypeCreation(beanName);
+							}
+						});
+						//实例化SpringFactoryBean后进入这里
+						bean = getObjectForBeanInstance(scopedInstance, name, beanName, mbd);
+					}
+```
+
+getObjectForBeanInstance方法
+
+```
+
+	if (object == null) {
+			// Return bean instance from factory.
+			FactoryBean<?> factory = (FactoryBean<?>) beanInstance;
+			// Caches object obtained from FactoryBean if it is a singleton.
+			if (mbd == null && containsBeanDefinition(beanName)) {
+				mbd = getMergedLocalBeanDefinition(beanName);
+			}
+			boolean synthetic = (mbd != null && mbd.isSynthetic());
+			//如果是factoryBean类型并且beanName不是以&开头，而且是第一次getBean的时候进入这里，调用factoryBean的getObject方法
+			object = getObjectFromFactoryBean(factory, beanName, !synthetic);
+		}
+		return object;
+```
+
+getObjectFromFactoryBean方法
+
+```
+protected Object getObjectFromFactoryBean(FactoryBean<?> factory, String beanName, boolean shouldPostProcess) {
+   if (factory.isSingleton() && containsSingleton(beanName)) {
+      synchronized (getSingletonMutex()) {
+         Object object = this.factoryBeanObjectCache.get(beanName);
+         if (object == null) {
+         //调用factoryBean的getObject方法
+            object = doGetObjectFromFactoryBean(factory, beanName);
+            
+            //把object放入factoryBeanObjectCache缓存
+            	if (containsSingleton(beanName)) {
+							this.factoryBeanObjectCache.put(beanName, object);
+						}
+```
+
 ### ImportBeanDefinitionRegistrar
 
 扫描com.zhangchu.analysis.dto包下带有index注解的类注入到spring容器中
