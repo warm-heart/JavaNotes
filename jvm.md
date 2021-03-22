@@ -614,7 +614,7 @@ Desired survivor size 17891328 bytes, new threshold 1 (max 6)
 [CMS-concurrent-reset: 0.001/0.001 secs]  重置数据和结构信息。
 ```
 
-**调优：**
+### 调优
 
 -XX:ConcGCThreads:并发的线程数，与用户线程一起执行的线程数。
 
